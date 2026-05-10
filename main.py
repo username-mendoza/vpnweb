@@ -2106,8 +2106,8 @@ async def download_user_ovpn_connect(
         f"resolv-retry infinite\n"
         f"remote-cert-tls server\n"
         f"verb 3\n\n"
-        f"auth-user-pass\n"
-        f"<auth-user-pass>\n{username}@{hub}\nx\n</auth-user-pass>\n\n"
+        f"# Username is derived from the certificate CN by the server.\n"
+        f"# For multi-hub servers add: auth-user-pass with {username}@{hub}\n\n"
         f"<ca>\n{ca_pem}\n</ca>\n"
     )
     filename = f"{username}_{hub}_connect.ovpn"
