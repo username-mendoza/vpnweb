@@ -1,0 +1,16 @@
+[Unit]
+Description=SoftEther VPN Web Manager
+After=network.target
+
+[Service]
+Type=simple
+User=vpnweb
+WorkingDirectory=/opt/vpnweb
+ExecStart=/usr/bin/python3 -m uvicorn main:app \
+    --host 0.0.0.0 \
+    --port 8080
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
