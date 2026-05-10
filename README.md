@@ -23,7 +23,17 @@ Web management UI for [SoftEther VPN](https://www.softethervpn.org/), built with
 - SoftEther VPN server with JSON-RPC enabled (port 5555 by default)
 - `vpncmd` at `/opt/vpnserver/vpncmd` (used as fallback for NAT-T relay connections)
 
-## Installation
+## Quick install
+
+```bash
+sudo bash <(curl -sSL https://raw.githubusercontent.com/username-mendoza/vpnweb/main/install.sh)
+```
+
+The script clones the repo, installs Python dependencies, and optionally installs and starts a systemd service. It asks before doing anything non-trivial.
+
+---
+
+## Manual installation
 
 ### 1. Clone and install dependencies
 
