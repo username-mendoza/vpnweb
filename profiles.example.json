@@ -1,0 +1,28 @@
+[
+  {
+    "id": "aabbccdd11223344",
+    "name": "Local Server",
+    "host": "127.0.0.1",
+    "port": 5555
+  },
+  {
+    "id": "aabbccdd11223355",
+    "name": "Office (direct)",
+    "host": "203.0.113.10",
+    "port": 5555
+  },
+  {
+    "id": "aabbccdd11223366",
+    "name": "Office (dual — direct + NAT-T fallback)",
+    "host": "203.0.113.10",
+    "port": 5555,
+    "host2": "yourserver.vpnazure.net",
+    "port2": 443
+  },
+  {
+    "id": "aabbccdd11223377",
+    "name": "VPN Azure relay",
+    "host": "yourserver.vpnazure.net",
+    "port": 443
+  }
+]
