@@ -2048,6 +2048,52 @@ async def download_user_ovpn(
     )
 
 
+@app.get("/api/hubs/{hub}/users/{username}/ovpn/connect")
+async def download_user_ovpn_connect(
+    hub: str, username: str,
+    remote_host: Optional[str] = None,
+    pw: str = Depends(get_password)
+):
+    """OpenVPN Connect profile — no pkcs11 directives; user assigns YubiKey via app GUI."""
+    host = _rpc_host.get()
+    port = _rpc_port.get()
+    ovpn_host = remote_host or host
+
+    try:
+        ovpn_cfg = await _rpc_direct("GetOpenVpnSstpConfig", {}, host, port, pw)
+        ovpn_port = ovpn_cfg.get("OpenVPNPortList_str", "1194").split(",")[0].strip()
+    except Exception:
+        ovpn_port = "1194"
+
+    try:
+        info = await _rpc_direct("GetServerInfo", {}, host, port, pw)
+        ca_der_b64 = info.get("ServerCert_bin", "")
+        ca_pem = _der_to_pem(base64.b64decode(ca_der_b64)) if ca_der_b64 else ""
+    except Exception:
+        ca_pem = ""
+
+    if not ca_pem:
+        raise HTTPException(500, "Could not retrieve server CA certificate")
+
+    ovpn_content = (
+        f"# OpenVPN Connect profile\n"
+        f"# After importing, open the profile in OpenVPN Connect, tap the pencil icon,\n"
+        f"# go to Certificate and Key > Assign > Hardware Tokens, select your YubiKey,\n"
+        f"# and enter your PIN.\n\n"
+        f"client\ndev tun\nproto udp\nremote {ovpn_host} {ovpn_port}\n\n"
+        f"tls-client\ndata-ciphers AES-128-CBC\nverb 3\nconnect-retry 5\nconnect-timeout 30\n"
+        f"reneg-sec 0\n\n"
+        f"auth-user-pass\n<auth-user-pass>\n{username}@{hub}\nx\n</auth-user-pass>\n\n"
+        f"<ca>\n{ca_pem}\n</ca>\n"
+    )
+    filename = f"{username}_{hub}_connect.ovpn"
+    return Response(
+        content=ovpn_content,
+        media_type="application/x-openvpn-profile",
+        headers={"Content-Disposition": f"attachment; filename=\"{filename}\""}
+    )
+
+
 # --- Groups ---
 
 @app.get("/api/hubs/{hub}/groups")

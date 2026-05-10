@@ -819,9 +819,17 @@
         <!-- OpenVPN config -->
         <div style="border-top:1px solid #2a2d3e;padding-top:.85rem;margin-bottom:.85rem">
           <div style="font-size:.72rem;font-weight:600;color:#444;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.6rem">OpenVPN Config</div>
-          <div class="form-row"><label>pkcs11-id</label><input type="text" id="edit-user-pkcs11-id" placeholder="pkcs11:model=YubiKey%20YK5;...;id=%01" style="font-family:monospace;font-size:.77rem"></div>
           <div class="form-row"><label>Remote host <span style="color:#555;font-weight:400">(optional — overrides profile host)</span></label><input type="text" id="edit-user-remote-host" placeholder="auto"></div>
-          <button class="btn btn-ghost btn-sm" onclick="downloadUserOvpn()">⬇ Download .ovpn</button>
+          <div style="margin-bottom:.5rem">
+            <div style="font-size:.72rem;color:#555;margin-bottom:.35rem">Community CLI / GUI — requires pkcs11-id</div>
+            <div class="form-row" style="margin-bottom:.35rem"><input type="text" id="edit-user-pkcs11-id" placeholder="pkcs11:model=YubiKey%20YK5;...;id=%01" style="font-family:monospace;font-size:.77rem"></div>
+            <button class="btn btn-ghost btn-sm" onclick="downloadUserOvpn()">⬇ .ovpn (Community)</button>
+          </div>
+          <div>
+            <div style="font-size:.72rem;color:#555;margin-bottom:.35rem">OpenVPN Connect v3.3+ (Windows/macOS) — no pkcs11-id needed</div>
+            <button class="btn btn-ghost btn-sm" onclick="downloadConnectOvpn()">⬇ .ovpn (OpenVPN Connect)</button>
+            <p id="connect-ovpn-hint" style="font-size:.72rem;color:#666;margin:.4rem 0 0">After import: edit profile → Certificate and Key → Assign → Hardware Tokens → select YubiKey → PIN. Requires Yubico PIV Tool + copy <code>libykcs11.dll</code> to <code>C:\Program Files\OpenVPN Connect\pkcs11_modules\</code></p>
+          </div>
         </div>
 
         <!-- Revoke -->
@@ -1919,11 +1927,20 @@ async function downloadUserOvpn() {
   const remoteHost = document.getElementById('edit-user-remote-host').value.trim();
   const err        = document.getElementById('edit-user-err');
   err.textContent  = '';
-  if (!pkcs11Id) { err.textContent = "Enter the user's YubiKey pkcs11-id"; return; }
+  if (!pkcs11Id) { err.textContent = "Enter the pkcs11-id for Community .ovpn (run openvpn --show-pkcs11-ids on the client to get it)"; return; }
   let url = `/api/hubs/${enc(currentHub)}/users/${enc(editingUser)}/ovpn?pkcs11_id=${encodeURIComponent(pkcs11Id)}`;
   if (remoteHost) url += `&remote_host=${encodeURIComponent(remoteHost)}`;
   const a = document.createElement('a');
   a.href = url; a.download = `${editingUser}_${currentHub}.ovpn`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+function downloadConnectOvpn() {
+  const remoteHost = document.getElementById('edit-user-remote-host').value.trim();
+  let url = `/api/hubs/${enc(currentHub)}/users/${enc(editingUser)}/ovpn/connect`;
+  if (remoteHost) url += `?remote_host=${encodeURIComponent(remoteHost)}`;
+  const a = document.createElement('a');
+  a.href = url; a.download = `${editingUser}_${currentHub}_connect.ovpn`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
