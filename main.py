@@ -2104,10 +2104,10 @@ async def download_user_ovpn_connect(
         f"remote {ovpn_host} {ovpn_port}\n"
         f"nobind\n"
         f"remote-cert-tls server\n"
-        f"tls-version-max 1.2\n"
+        f"cipher AES-128-CBC\n"
         f"verb 3\n\n"
         f"auth-user-pass\n"
-        f"<auth-user-pass>\n{username}@{hub}\nx\n</auth-user-pass>\n\n"
+        f"<auth-user-pass>\n{username}@{hub}\n\n</auth-user-pass>\n\n"
         f"<ca>\n{ca_pem}\n</ca>\n"
     )
     filename = f"{username}_{hub}_connect.ovpn"
