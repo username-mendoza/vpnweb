@@ -2023,8 +2023,8 @@ async def download_user_ovpn(
         ovpn_port = "1194"
 
     try:
-        info = await _rpc_direct("GetServerInfo", {}, host, port, pw)
-        ca_der_b64 = info.get("ServerCert_bin", "")
+        info = await _rpc_direct("GetServerCert", {}, host, port, pw)
+        ca_der_b64 = info.get("Cert_bin", "")
         ca_pem = _der_to_pem(base64.b64decode(ca_der_b64)) if ca_der_b64 else ""
     except Exception:
         ca_pem = ""
@@ -2066,8 +2066,8 @@ async def download_user_ovpn_connect(
         ovpn_port = "1194"
 
     try:
-        info = await _rpc_direct("GetServerInfo", {}, host, port, pw)
-        ca_der_b64 = info.get("ServerCert_bin", "")
+        info = await _rpc_direct("GetServerCert", {}, host, port, pw)
+        ca_der_b64 = info.get("Cert_bin", "")
         ca_pem = _der_to_pem(base64.b64decode(ca_der_b64)) if ca_der_b64 else ""
     except Exception:
         ca_pem = ""
