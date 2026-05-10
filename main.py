@@ -2006,15 +2006,31 @@ async def download_user_p12(hub: str, username: str, pw: str = Depends(get_passw
         headers={"Content-Disposition": f'attachment; filename="{username}_{hub}.p12"'}
     )
 
+def _ovpn_host(request: Request, remote_host: Optional[str]) -> str:
+    """Resolve the VPN server hostname for a .ovpn remote directive.
+    Priority: explicit remote_host > profile RPC host > request Host header.
+    Never returns 127.0.0.1/localhost — that's the local JSON-RPC address, not
+    the client-facing address."""
+    if remote_host:
+        return remote_host
+    rpc = _rpc_host.get()
+    if rpc not in ("127.0.0.1", "::1", "localhost"):
+        return rpc
+    # Fall back to the host the browser used to reach vpnweb (strips port)
+    browser_host = request.headers.get("host", "").split(":")[0]
+    return browser_host or rpc
+
+
 @app.get("/api/hubs/{hub}/users/{username}/ovpn")
 async def download_user_ovpn(
     hub: str, username: str, pkcs11_id: str,
+    request: Request,
     remote_host: Optional[str] = None,
     pw: str = Depends(get_password)
 ):
     host = _rpc_host.get()
     port = _rpc_port.get()
-    ovpn_host = remote_host or host
+    ovpn_host = _ovpn_host(request, remote_host)
 
     try:
         ovpn_cfg = await _rpc_direct("GetOpenVpnSstpConfig", {}, host, port, pw)
@@ -2051,13 +2067,14 @@ async def download_user_ovpn(
 @app.get("/api/hubs/{hub}/users/{username}/ovpn/connect")
 async def download_user_ovpn_connect(
     hub: str, username: str,
+    request: Request,
     remote_host: Optional[str] = None,
     pw: str = Depends(get_password)
 ):
     """OpenVPN Connect profile — no pkcs11 directives; user assigns YubiKey via app GUI."""
     host = _rpc_host.get()
     port = _rpc_port.get()
-    ovpn_host = remote_host or host
+    ovpn_host = _ovpn_host(request, remote_host)
 
     try:
         ovpn_cfg = await _rpc_direct("GetOpenVpnSstpConfig", {}, host, port, pw)
