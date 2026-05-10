@@ -10,8 +10,19 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BOLD='\033[1m'; NC='\
 info()  { echo -e "${GREEN}[+]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[!]${NC} $*"; }
 error() { echo -e "${RED}[x]${NC} $*" >&2; exit 1; }
-ask()   { local r; read -rp "$1 [y/N] " r < /dev/tty; [[ "$r" =~ ^[Yy]$ ]]; }
-prompt(){ local r; read -rp "$1 " r < /dev/tty; echo "${r:-$2}"; }
+
+# Check once whether /dev/tty is usable (unavailable in Docker/piped installs)
+TTY_OK=false
+{ true < /dev/tty; } 2>/dev/null && TTY_OK=true || true
+
+ask() {
+    $TTY_OK || { warn "Non-interactive — skipping: $1 (defaulting No)"; return 1; }
+    local r; read -rp "$1 [y/N] " r < /dev/tty; [[ "$r" =~ ^[Yy]$ ]]
+}
+prompt() {
+    $TTY_OK || { echo "$2"; return; }
+    local r; read -rp "$1 " r < /dev/tty; echo "${r:-$2}"
+}
 
 echo -e "${BOLD}vpnweb — SoftEther VPN Web Manager${NC}"
 echo
@@ -24,6 +35,12 @@ PY=$(command -v python3 || true)
 PY_VER=$($PY -c 'import sys; print(sys.version_info >= (3,10))')
 [ "$PY_VER" = "True" ] || error "Python 3.10+ required (found $($PY --version))"
 info "Python: $($PY --version)"
+
+# Ensure venv+ensurepip are available (Debian splits these into python3-venv)
+$PY -c 'import ensurepip' 2>/dev/null || {
+    warn "python3-venv not found — attempting to install..."
+    apt-get install -y python3-venv -qq || error "Could not install python3-venv — install it manually and re-run"
+}
 
 # Install directory
 INSTALL_DIR=$(prompt "Install directory [$DEFAULT_INSTALL_DIR]:" "$DEFAULT_INSTALL_DIR")
@@ -39,9 +56,14 @@ else
     git clone --depth 1 "$REPO" "$INSTALL_DIR"
 fi
 
-# Dependencies
+# Virtual environment — avoids pip PEP 668 (externally-managed-environment) on Debian 12+
+VENV="$INSTALL_DIR/.venv"
+info "Creating virtualenv at $VENV ..."
+$PY -m venv "$VENV"
+VENV_PY="$VENV/bin/python3"
+
 info "Installing Python dependencies..."
-$PY -m pip install --quiet fastapi "uvicorn[standard]" httpx cryptography pydantic
+$VENV_PY -m pip install --quiet fastapi "uvicorn[standard]" httpx cryptography pydantic
 
 # Profiles
 if [ ! -f "$INSTALL_DIR/profiles.json" ]; then
@@ -68,7 +90,7 @@ After=network.target
 Type=simple
 User=vpnweb
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$PY -m uvicorn main:app --host 0.0.0.0 --port $PORT
+ExecStart=$VENV_PY -m uvicorn main:app --host 0.0.0.0 --port $PORT
 Restart=on-failure
 RestartSec=5
 
@@ -89,7 +111,7 @@ EOF
     fi
 else
     info "Run manually:"
-    echo "  cd $INSTALL_DIR && python3 -m uvicorn main:app --host 0.0.0.0 --port $DEFAULT_PORT"
+    echo "  cd $INSTALL_DIR && $VENV_PY -m uvicorn main:app --host 0.0.0.0 --port $DEFAULT_PORT"
 fi
 
 echo
