@@ -21,47 +21,56 @@ Web management UI for [SoftEther VPN](https://www.softethervpn.org/), built with
 
 - Python 3.10+
 - SoftEther VPN server with JSON-RPC enabled (port 5555 by default)
-- `vpncmd` on PATH or at `/opt/vpnserver/vpncmd` (used as fallback for NAT-T relay connections)
+- `vpncmd` at `/opt/vpnserver/vpncmd` (used as fallback for NAT-T relay connections)
 
-```
-pip install fastapi uvicorn[standard] httpx cryptography pydantic
-```
+## Installation
 
-## Running
+### 1. Clone and install dependencies
 
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8080
+git clone https://github.com/username-mendoza/vpnweb.git /opt/vpnweb
+cd /opt/vpnweb
+pip install fastapi "uvicorn[standard]" httpx cryptography pydantic
 ```
 
-Or as a systemd service — see the example unit file below.
+### 2. Configure
 
-### systemd unit
-
-```ini
-[Unit]
-Description=vpnweb
-After=network.target
-
-[Service]
-WorkingDirectory=/opt/vpnweb
-ExecStart=uvicorn main:app --host 0.0.0.0 --port 8080
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
-## Configuration
-
-Edit the top of `main.py`:
+Edit the top of `main.py` to match your SoftEther server:
 
 ```python
 SOFTETHER_HOST = "127.0.0.1"   # SoftEther JSON-RPC host
 SOFTETHER_PORT = 5555           # SoftEther JSON-RPC port
-VPNCMD        = "/opt/vpnserver/vpncmd"  # vpncmd path (NAT-T fallback)
+VPNCMD        = "/opt/vpnserver/vpncmd"  # path to vpncmd binary
 ```
 
-Connection profiles (server addresses) are stored in `profiles.json` and managed through the UI — this file is excluded from the repo.
+Copy the profiles example — connection profiles are then managed through the UI:
+
+```bash
+cp profiles.example.json profiles.json
+```
+
+### 3. Run as a systemd service
+
+```bash
+# Create a dedicated user (optional but recommended)
+useradd -r -s /sbin/nologin vpnweb
+
+# Install the service file
+cp vpnweb.service /etc/systemd/system/
+# Edit WorkingDirectory and User in the service file if needed
+systemctl daemon-reload
+systemctl enable --now vpnweb
+```
+
+The service file is included in the repo as `vpnweb.service`.
+
+### 4. Open the UI
+
+Navigate to `http://<server>:8080` and log in with your SoftEther server-admin password.
+
+## Configuration
+
+Connection profiles (server addresses and ports) are stored in `profiles.json` and managed through the UI — excluded from the repo, use `profiles.example.json` as a starting point.
 
 Generated `.p12` certificates are stored in `generated_certs/` (also excluded from the repo).
 
