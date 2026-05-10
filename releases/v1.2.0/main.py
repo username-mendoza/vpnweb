@@ -8,34 +8,21 @@ import csv as _csv
 import io
 import re
 import time
-import pathlib as _pl
 from contextvars import ContextVar
 from fastapi import FastAPI, HTTPException, Request, Response, Depends
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 from typing import Optional
 import secrets
 import os
 import httpx
-from cryptography import x509 as _x509
-from cryptography.hazmat.primitives import hashes as _hashes
-from cryptography.hazmat.primitives import serialization as _serialization
-from cryptography.hazmat.primitives.asymmetric import rsa as _rsa
-from cryptography.hazmat.primitives.serialization import pkcs12 as _pkcs12
-from cryptography.hazmat.backends import default_backend as _crypto_backend
-import datetime as _dt
 
 app = FastAPI()
-app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 SOFTETHER_HOST = "127.0.0.1"
 SOFTETHER_PORT = 5555
 VPNCMD = "/opt/vpnserver/vpncmd"
-
-CERTS_DIR = _pl.Path(__file__).parent / "generated_certs"
-CERTS_DIR.mkdir(exist_ok=True)
 
 # Per-request RPC target injected by middleware
 _rpc_host: ContextVar[str] = ContextVar("rpc_host", default=SOFTETHER_HOST)
@@ -135,13 +122,11 @@ def _http() -> httpx.AsyncClient:
 
 async def _rpc_direct(method: str, params: dict, host: str, port: int, password: str) -> dict:
     payload = {"jsonrpc": "2.0", "id": "1", "method": method, "params": params}
-    # SoftEther reads the header as raw bytes; encode non-ASCII passwords as UTF-8
-    pw_header = password.encode("utf-8").decode("latin-1")
     try:
         r = await _http().post(
             f"https://{host}:{port}/api/",
             json=payload,
-            headers={"X-VPNADMIN-HUBNAME": "", "X-VPNADMIN-PASSWORD": pw_header},
+            headers={"X-VPNADMIN-HUBNAME": "", "X-VPNADMIN-PASSWORD": password},
         )
     except httpx.ConnectError:
         raise HTTPException(502, f"Cannot connect to {host}:{port}")
@@ -272,118 +257,6 @@ def _n(v) -> int:
 def _b(v) -> bool:
     s = str(v).strip().lower()
     return s in ("yes", "true", "online", "enabled", "1", "listening", "running") or s.startswith("enable")
-
-
-def _pem_to_der(pem: str) -> bytes:
-    lines = pem.strip().splitlines()
-    b64 = ''.join(l for l in lines if not l.startswith('---'))
-    return base64.b64decode(b64)
-
-def _der_to_pem(der: bytes) -> str:
-    b64 = base64.b64encode(der).decode()
-    lines = [b64[i:i+64] for i in range(0, len(b64), 64)]
-    return '-----BEGIN CERTIFICATE-----\n' + '\n'.join(lines) + '\n-----END CERTIFICATE-----'
-
-def _parse_cert_info(der_b64: str) -> dict:
-    try:
-        der = base64.b64decode(der_b64)
-        cert = _x509.load_der_x509_certificate(der, _crypto_backend())
-
-        _OID_LABELS = {
-            _x509.oid.NameOID.COMMON_NAME:             "CN",
-            _x509.oid.NameOID.ORGANIZATION_NAME:        "O",
-            _x509.oid.NameOID.ORGANIZATIONAL_UNIT_NAME: "OU",
-            _x509.oid.NameOID.COUNTRY_NAME:             "C",
-            _x509.oid.NameOID.STATE_OR_PROVINCE_NAME:   "ST",
-            _x509.oid.NameOID.LOCALITY_NAME:            "L",
-            _x509.oid.NameOID.EMAIL_ADDRESS:            "E",
-            _x509.oid.NameOID.SERIAL_NUMBER:            "SN",
-        }
-        def _dn(name):
-            return ", ".join(
-                f"{_OID_LABELS.get(a.oid, a.oid.dotted_string)}={a.value}"
-                for a in name
-            ) or "(empty)"
-        def _cn(name):
-            a = name.get_attributes_for_oid(_x509.oid.NameOID.COMMON_NAME)
-            return a[0].value if a else ''
-        def _fmt_hex(n):
-            h = format(n, 'X')
-            return ':'.join(h[i:i+2] for i in range(0, len(h), 2))
-
-        try:
-            vf = cert.not_valid_before_utc
-            vt = cert.not_valid_after_utc
-        except AttributeError:
-            vf = cert.not_valid_before
-            vt = cert.not_valid_after
-
-        fp256 = cert.fingerprint(_hashes.SHA256()).hex()
-        fp1   = cert.fingerprint(_hashes.SHA1()).hex()
-
-        pub = cert.public_key()
-        key_alg  = "RSA" if "RSA" in type(pub).__name__.upper() else "EC" if "EC" in type(pub).__name__.upper() else type(pub).__name__
-        key_bits = getattr(pub, "key_size", None)
-
-        sig_alg = cert.signature_hash_algorithm.name.upper() if cert.signature_hash_algorithm else "Unknown"
-
-        # Extensions
-        _EKU_NAMES = {
-            "1.3.6.1.5.5.7.3.1": "Server Auth", "1.3.6.1.5.5.7.3.2": "Client Auth",
-            "1.3.6.1.5.5.7.3.3": "Code Signing","1.3.6.1.5.5.7.3.4": "Email Protection",
-        }
-        ext_lines = []
-        for ext in cert.extensions:
-            try:
-                v = ext.value
-                if isinstance(v, _x509.BasicConstraints):
-                    ext_lines.append(("Basic Constraints", f"CA: {v.ca}" + (f", pathLen: {v.path_length}" if v.path_length is not None else "")))
-                elif isinstance(v, _x509.KeyUsage):
-                    bits = [u.replace('_',' ').title() for u in
-                            ['digital_signature','content_commitment','key_encipherment',
-                             'data_encipherment','key_agreement','key_cert_sign','crl_sign']
-                            if _ku_safe(v, u)]
-                    if bits: ext_lines.append(("Key Usage", ", ".join(bits)))
-                elif isinstance(v, _x509.ExtendedKeyUsage):
-                    ekus = [_EKU_NAMES.get(o.dotted_string, o.dotted_string) for o in v]
-                    ext_lines.append(("Extended Key Usage", ", ".join(ekus)))
-                elif isinstance(v, _x509.SubjectAlternativeName):
-                    sans = [str(n) for n in v]
-                    if sans: ext_lines.append(("Subject Alt Names", ", ".join(sans)))
-                elif isinstance(v, _x509.SubjectKeyIdentifier):
-                    ext_lines.append(("Subject Key ID", v.digest.hex().upper()))
-                elif isinstance(v, _x509.AuthorityKeyIdentifier):
-                    if v.key_identifier:
-                        ext_lines.append(("Authority Key ID", v.key_identifier.hex().upper()))
-            except Exception:
-                pass
-
-        return {
-            "cn":           _cn(cert.subject),
-            "issuer_cn":    _cn(cert.issuer),
-            "subject":      _dn(cert.subject),
-            "issuer":       _dn(cert.issuer),
-            "self_signed":  cert.issuer == cert.subject,
-            "version":      cert.version.value + 1,
-            "serial":       str(cert.serial_number),
-            "serial_hex":   _fmt_hex(cert.serial_number),
-            "valid_from":   vf.strftime("%Y-%m-%d %H:%M:%S UTC"),
-            "valid_to":     vt.strftime("%Y-%m-%d %H:%M:%S UTC"),
-            "key_algorithm": key_alg,
-            "key_bits":     key_bits,
-            "sig_algorithm": f"{key_alg}with{sig_alg}",
-            "fingerprint":  ':'.join(fp256[i:i+2].upper() for i in range(0, len(fp256), 2)),
-            "fingerprint_sha1": ':'.join(fp1[i:i+2].upper() for i in range(0, len(fp1), 2)),
-            "extensions":   ext_lines,
-        }
-    except Exception:
-        return {}
-
-def _ku_safe(ku, attr):
-    try:
-        return bool(getattr(ku, attr, False))
-    except ValueError:
-        return False
 
 
 # Column names that ONLY appear in table header rows (never as data values)
@@ -901,44 +774,20 @@ async def _vpncmd_rpc(method: str, params: dict, host: str, port: int, password:
     if method == "GetUser":
         uname = params.get("Name_str", "")
         kv = _vc_kv(await _vc_in(host, port, password, [f"Hub {hub}", f"UserGet {uname}"]), "UserGet")
-        # Parse auth type from vpncmd text output
-        auth_text = kv.get("Auth Type", kv.get("Authentication Method", kv.get("Authentication", ""))).lower()
-        if "cert" in auth_text or "certificate" in auth_text or "x.509" in auth_text:
-            auth_type = 2
-        elif "radius" in auth_text:
-            auth_type = 3
-        elif "nt" in auth_text or "ntdomain" in auth_text:
-            auth_type = 4
-        else:
-            auth_type = 1
-        # Try to get cert data via direct JSON-RPC if auth type is cert
-        cert_data = None
-        if auth_type == 2:
-            try:
-                direct = await _rpc_direct(method, params, host, port, password)
-                cert_data = (direct.get("UserX_bin") or
-                             direct.get("Auth_UserCert_CertData_bin") or
-                             direct.get("AuthUserCert_bin") or
-                             direct.get("Auth_UserCert_bin"))
-            except Exception:
-                pass
-        result = {
+        return {
             "Name_str":            uname,
             "RealName_utf":        kv.get("Full Name", kv.get("Real Name", "")),
             "Note_utf":            kv.get("Note", ""),
             "GroupName_str":       kv.get("Group Name", kv.get("Group", "")),
-            "AuthType_u32":        auth_type,
+            "AuthType_u32":        1,
             "NumLogin_u32":        _n(kv.get("Number of Logins", 0)),
             "LastLoginTime_dt": 0, "CreatedTime_dt": 0, "UpdatedTime_dt": 0,
             "IsExpireDate_bool": False, "ExpireDate_dt": 0,
         }
-        if cert_data:
-            result["Auth_UserCert_CertData_bin"] = cert_data
-        return result
 
     if method == "CreateUser":
         uname = params.get("Name_str", "")
-        upw   = params.get("Auth_Password_str", "")
+        upw   = params.get("Auth_Password_PlainPassword_str", "")
         group = params.get("GroupName_str", "")
         rname = params.get("RealName_utf", "")
         note  = params.get("Note_utf", "")
@@ -951,7 +800,7 @@ async def _vpncmd_rpc(method: str, params: dict, host: str, port: int, password:
 
     if method == "SetUser":
         uname = params.get("Name_str", "")
-        upw   = params.get("Auth_Password_str")
+        upw   = params.get("Auth_Password_PlainPassword_str")
         group = params.get("GroupName_str", "")
         rname = params.get("RealName_utf", "")
         note  = params.get("Note_utf", "")
@@ -1813,27 +1662,9 @@ async def list_users(hub: str, pw: str = Depends(get_password)):
         result = await _vpncmd_rpc("EnumUser", params, host, port, pw)
     return result.get("UserList", [])
 
-
-_CERT_FIELD_CANDIDATES = [
-    "UserX_bin",                   # SoftEther JSON-RPC GetUser actual field name
-    "Auth_UserCert_CertData_bin",  # SoftEther SetUser input field name (kept for compatibility)
-    "AuthUserCert_bin",
-    "Auth_UserCert_bin",
-]
-
 @app.get("/api/hubs/{hub}/users/{username}")
 async def get_user(hub: str, username: str, pw: str = Depends(get_password)):
-    user = await rpc("GetUser", {"HubName_str": hub, "Name_str": username}, admin_password=pw)
-    if user.get("AuthType_u32") == 2:
-        for _cf in _CERT_FIELD_CANDIDATES:
-            _cert_val = user.get(_cf)
-            if _cert_val:
-                info = _parse_cert_info(_cert_val)
-                if info:
-                    user["cert_info"] = info
-                break
-    user["has_p12"] = (CERTS_DIR / f"{hub}__{username}.p12").exists()
-    return user
+    return await rpc("GetUser", {"HubName_str": hub, "Name_str": username}, admin_password=pw)
 
 class UserCreate(BaseModel):
     username: str
@@ -1851,7 +1682,7 @@ async def create_user(hub: str, body: UserCreate, pw: str = Depends(get_password
         "Note_utf": body.note,
         "GroupName_str": body.group,
         "AuthType_u32": 1,
-        "Auth_Password_str": body.password,
+        "Auth_Password_PlainPassword_str": body.password,
     }, admin_password=pw)
 
 class UserUpdate(BaseModel):
@@ -1862,260 +1693,21 @@ class UserUpdate(BaseModel):
 
 @app.put("/api/hubs/{hub}/users/{username}")
 async def update_user(hub: str, username: str, body: UserUpdate, pw: str = Depends(get_password)):
-    current = await rpc("GetUser", {"HubName_str": hub, "Name_str": username}, admin_password=pw)
-    auth_type = current.get("AuthType_u32", 1)
     params: dict = {
         "HubName_str": hub,
         "Name_str": username,
         "RealName_utf": body.realname,
         "Note_utf": body.note,
         "GroupName_str": body.group,
-        "AuthType_u32": auth_type,
+        "AuthType_u32": 1,
     }
-    if auth_type == 1 and body.password:
-        params["Auth_Password_str"] = body.password
-    elif auth_type == 2:
-        cert_data = (current.get("UserX_bin") or current.get("Auth_UserCert_CertData_bin"))
-        if cert_data:
-            params["UserX_bin"] = cert_data
+    if body.password:
+        params["Auth_Password_PlainPassword_str"] = body.password
     return await rpc("SetUser", params, admin_password=pw)
 
 @app.delete("/api/hubs/{hub}/users/{username}")
 async def delete_user(hub: str, username: str, pw: str = Depends(get_password)):
     return await rpc("DeleteUser", {"HubName_str": hub, "Name_str": username}, admin_password=pw)
-
-
-class UserCertBody(BaseModel):
-    cert_pem: str
-
-class UserCertRevoke(BaseModel):
-    password: str
-
-@app.post("/api/hubs/{hub}/users/{username}/cert")
-async def set_user_cert(hub: str, username: str, body: UserCertBody, pw: str = Depends(get_password)):
-    try:
-        der = _pem_to_der(body.cert_pem)
-    except Exception:
-        raise HTTPException(400, "Invalid PEM certificate")
-    der_b64 = base64.b64encode(der).decode()
-    current = await rpc("GetUser", {"HubName_str": hub, "Name_str": username}, admin_password=pw)
-    await rpc("SetUser", {
-        "HubName_str": hub,
-        "Name_str": username,
-        "RealName_utf": current.get("Realname_utf") or current.get("RealName_utf") or "",
-        "Note_utf": current.get("Note_utf") or "",
-        "GroupName_str": current.get("GroupName_str") or "",
-        "AuthType_u32": 2,
-        "UserX_bin": der_b64,
-    }, admin_password=pw)
-    return _parse_cert_info(der_b64)
-
-@app.delete("/api/hubs/{hub}/users/{username}/cert")
-async def revoke_user_cert(hub: str, username: str, body: UserCertRevoke, pw: str = Depends(get_password)):
-    current = await rpc("GetUser", {"HubName_str": hub, "Name_str": username}, admin_password=pw)
-    await rpc("SetUser", {
-        "HubName_str": hub,
-        "Name_str": username,
-        "RealName_utf": current.get("Realname_utf") or current.get("RealName_utf") or "",
-        "Note_utf": current.get("Note_utf") or "",
-        "GroupName_str": current.get("GroupName_str") or "",
-        "AuthType_u32": 1,
-        "Auth_Password_str": body.password,
-    }, admin_password=pw)
-    p12_path = CERTS_DIR / f"{hub}__{username}.p12"
-    p12_path.unlink(missing_ok=True)
-    return {"ok": True}
-
-@app.get("/api/hubs/{hub}/users/{username}/cert/export")
-async def export_user_cert(hub: str, username: str, pw: str = Depends(get_password)):
-    user = await rpc("GetUser", {"HubName_str": hub, "Name_str": username}, admin_password=pw)
-    cert_b64 = user.get("UserX_bin") or user.get("Auth_UserCert_CertData_bin")
-    if user.get("AuthType_u32") != 2 or not cert_b64:
-        raise HTTPException(404, "No certificate registered for this user")
-    der = base64.b64decode(cert_b64)
-    pem = _der_to_pem(der)
-    return Response(
-        content=pem,
-        media_type="application/x-pem-file",
-        headers={"Content-Disposition": f'attachment; filename="{username}_{hub}.crt"'}
-    )
-
-class UserCertGenerate(BaseModel):
-    cn: str = ""
-    o: str = ""
-    ou: str = ""
-    c: str = ""
-    st: str = ""
-    l: str = ""
-    days: int = 1825
-    key_size: int = 2048
-
-@app.post("/api/hubs/{hub}/users/{username}/cert/generate")
-async def generate_user_cert(hub: str, username: str, body: UserCertGenerate, pw: str = Depends(get_password)):
-    if body.key_size not in (2048, 4096):
-        raise HTTPException(400, "key_size must be 2048 or 4096")
-    cn = body.cn.strip() or username
-    oid = _x509.oid.NameOID
-    attrs = [_x509.NameAttribute(oid.COMMON_NAME, cn)]
-    if body.o.strip():  attrs.append(_x509.NameAttribute(oid.ORGANIZATION_NAME,        body.o.strip()))
-    if body.ou.strip(): attrs.append(_x509.NameAttribute(oid.ORGANIZATIONAL_UNIT_NAME, body.ou.strip()))
-    if body.c.strip():  attrs.append(_x509.NameAttribute(oid.COUNTRY_NAME,             body.c.strip().upper()[:2]))
-    if body.st.strip(): attrs.append(_x509.NameAttribute(oid.STATE_OR_PROVINCE_NAME,   body.st.strip()))
-    if body.l.strip():  attrs.append(_x509.NameAttribute(oid.LOCALITY_NAME,            body.l.strip()))
-    key = _rsa.generate_private_key(
-        public_exponent=65537, key_size=body.key_size, backend=_crypto_backend()
-    )
-    subject = issuer = _x509.Name(attrs)
-    cert = (
-        _x509.CertificateBuilder()
-        .subject_name(subject)
-        .issuer_name(issuer)
-        .public_key(key.public_key())
-        .serial_number(_x509.random_serial_number())
-        .not_valid_before(_dt.datetime.utcnow())
-        .not_valid_after(_dt.datetime.utcnow() + _dt.timedelta(days=body.days))
-        .sign(key, _hashes.SHA256(), _crypto_backend())
-    )
-    cert_der = cert.public_bytes(_serialization.Encoding.DER)
-    der_b64 = base64.b64encode(cert_der).decode()
-    current = await rpc("GetUser", {"HubName_str": hub, "Name_str": username}, admin_password=pw)
-    await rpc("SetUser", {
-        "HubName_str": hub,
-        "Name_str": username,
-        "RealName_utf": current.get("Realname_utf") or current.get("RealName_utf") or "",
-        "Note_utf": current.get("Note_utf") or "",
-        "GroupName_str": current.get("GroupName_str") or "",
-        "AuthType_u32": 2,
-        "UserX_bin": der_b64,
-    }, admin_password=pw)
-    p12 = _pkcs12.serialize_key_and_certificates(
-        name=cn.encode(), key=key, cert=cert, cas=None,
-        encryption_algorithm=_serialization.NoEncryption()
-    )
-    (CERTS_DIR / f"{hub}__{username}.p12").write_bytes(p12)
-    return {"ok": True}
-
-@app.get("/api/hubs/{hub}/users/{username}/cert/p12")
-async def download_user_p12(hub: str, username: str, pw: str = Depends(get_password)):
-    p12_path = CERTS_DIR / f"{hub}__{username}.p12"
-    if not p12_path.exists():
-        raise HTTPException(404, "No .p12 on server — regenerate the certificate")
-    return Response(
-        content=p12_path.read_bytes(),
-        media_type="application/x-pkcs12",
-        headers={"Content-Disposition": f'attachment; filename="{username}_{hub}.p12"'}
-    )
-
-def _ovpn_host(request: Request, remote_host: Optional[str]) -> str:
-    """Resolve the VPN server hostname for a .ovpn remote directive.
-    Priority: explicit remote_host > profile RPC host > request Host header.
-    Never returns 127.0.0.1/localhost — that's the local JSON-RPC address, not
-    the client-facing address."""
-    if remote_host:
-        return remote_host
-    rpc = _rpc_host.get()
-    if rpc not in ("127.0.0.1", "::1", "localhost"):
-        return rpc
-    # Fall back to the host the browser used to reach vpnweb (strips port)
-    browser_host = request.headers.get("host", "").split(":")[0]
-    return browser_host or rpc
-
-
-@app.get("/api/hubs/{hub}/users/{username}/ovpn")
-async def download_user_ovpn(
-    hub: str, username: str, pkcs11_id: str,
-    request: Request,
-    remote_host: Optional[str] = None,
-    pw: str = Depends(get_password)
-):
-    host = _rpc_host.get()
-    port = _rpc_port.get()
-    ovpn_host = _ovpn_host(request, remote_host)
-
-    try:
-        ovpn_cfg = await _rpc_direct("GetOpenVpnSstpConfig", {}, host, port, pw)
-        ovpn_port = ovpn_cfg.get("OpenVPNPortList_str", "1194").split(",")[0].strip()
-    except Exception:
-        ovpn_port = "1194"
-
-    try:
-        info = await _rpc_direct("GetServerCert", {}, host, port, pw)
-        ca_der_b64 = info.get("Cert_bin", "")
-        ca_pem = _der_to_pem(base64.b64decode(ca_der_b64)) if ca_der_b64 else ""
-    except Exception:
-        ca_pem = ""
-
-    if not ca_pem:
-        raise HTTPException(500, "Could not retrieve server CA certificate")
-
-    ovpn_content = (
-        f"client\ndev tun\nproto udp\nremote {ovpn_host} {ovpn_port}\n\n"
-        f"tls-client\ndata-ciphers AES-128-CBC\nverb 3\nconnect-retry 5\nconnect-timeout 30\n\n"
-        f'pkcs11-providers "C:\\\\Program Files\\\\Yubico\\\\Yubico PIV Tool\\\\bin\\\\libykcs11.dll"\n'
-        f"pkcs11-id '{pkcs11_id}'\n\n"
-        f"auth-user-pass\n<auth-user-pass>\n{username}@{hub}\nx\n</auth-user-pass>\n\n"
-        f"<ca>\n{ca_pem}\n</ca>\n"
-    )
-    filename = f"{username}_{hub}.ovpn"
-    return Response(
-        content=ovpn_content,
-        media_type="application/x-openvpn-profile",
-        headers={"Content-Disposition": f"attachment; filename=\"{filename}\""}
-    )
-
-
-@app.get("/api/hubs/{hub}/users/{username}/ovpn/connect")
-async def download_user_ovpn_connect(
-    hub: str, username: str,
-    request: Request,
-    remote_host: Optional[str] = None,
-    pw: str = Depends(get_password)
-):
-    """OpenVPN Connect profile — no pkcs11 directives; user assigns YubiKey via app GUI."""
-    host = _rpc_host.get()
-    port = _rpc_port.get()
-    ovpn_host = _ovpn_host(request, remote_host)
-
-    try:
-        ovpn_cfg = await _rpc_direct("GetOpenVpnSstpConfig", {}, host, port, pw)
-        ovpn_port = ovpn_cfg.get("OpenVPNPortList_str", "1194").split(",")[0].strip()
-    except Exception:
-        ovpn_port = "1194"
-
-    try:
-        info = await _rpc_direct("GetServerCert", {}, host, port, pw)
-        ca_der_b64 = info.get("Cert_bin", "")
-        ca_pem = _der_to_pem(base64.b64decode(ca_der_b64)) if ca_der_b64 else ""
-    except Exception:
-        ca_pem = ""
-
-    if not ca_pem:
-        raise HTTPException(500, "Could not retrieve server CA certificate")
-
-    ovpn_content = (
-        f"# OpenVPN Connect profile\n"
-        f"# After importing: edit profile -> Certificate and Key -> Assign\n"
-        f"# -> Hardware Tokens -> select YubiKey -> enter PIN.\n"
-        f"# Requires: Yubico PIV Tool installed + libykcs11.dll in\n"
-        f"# C:\\Program Files\\OpenVPN Connect\\pkcs11_modules\\\n\n"
-        f"client\n"
-        f"dev tun\n"
-        f"proto udp\n"
-        f"remote {ovpn_host} {ovpn_port}\n"
-        f"nobind\n"
-        f"remote-cert-tls server\n"
-        f"tls-version-max 1.2\n"
-        f"verb 3\n\n"
-        f"auth-user-pass\n"
-        f"<auth-user-pass>\n{username}@{hub}\nx\n</auth-user-pass>\n\n"
-        f"<ca>\n{ca_pem}\n</ca>\n"
-    )
-    filename = f"{username}_{hub}_connect.ovpn"
-    return Response(
-        content=ovpn_content,
-        media_type="application/x-openvpn-profile",
-        headers={"Content-Disposition": f"attachment; filename=\"{filename}\""}
-    )
 
 
 # --- Groups ---

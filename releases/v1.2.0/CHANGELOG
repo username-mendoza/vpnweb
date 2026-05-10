@@ -1,0 +1,38 @@
+v1.2.0 (2026-04-29)
+-------------------
+- Dual-address profiles: each profile now has a secondary hostname/port tried automatically
+  if the primary is unreachable at login time
+- Removed NAT-T hint support: host/hint format no longer parsed or stripped anywhere —
+  hostname stored and used as-is in both JSON-RPC and vpncmd paths
+- Fixed saveProfile: now checks HTTP response status and shows server error messages
+- Added profiles gear button (⚙) to main screen sidebar — no need to disconnect to edit profiles
+
+v1.1.0 (2026-04-29)
+-------------------
+- Changed listen port from 8443 to 8080 (HTTP, for HAProxy SSL termination upstream)
+  Note: port 443 is occupied by SoftEther VPN server on the same host
+- Renamed session cookie from "session" to "vpnweb_sid" (avoids HAProxy sticky-session conflict)
+- Login endpoint switched to JSONResponse for reliable Set-Cookie delivery
+- All fetch() calls now use credentials: 'include'
+- Added 30-minute inactivity session timeout (auto-logout)
+
+v1.0.0 (2026-04-28)
+-------------------
+Initial release.
+
+Features:
+- FastAPI + single-page JS frontend for SoftEther VPN management
+- Direct JSON-RPC (httpx) and vpncmd subprocess fallback for relay servers
+- Bulk endpoints /api/server/all and /api/hubs/{hub}/all (one round-trip load)
+- Session management with inactivity timeout (cookie: vpnweb_sid)
+- Connection profiles (profiles.json) with per-profile host/port
+- VPN Azure toggle and hostname display (vpncmd fallback, JSON-RPC unsupported)
+- Dynamic DNS hostname display
+- SecureNAT / DHCP config with MAC address display
+- User, group, session, MAC/IP table management per hub
+- Cascade links, L3 switches, listeners, bridges
+- IPSec, OpenVPN, syslog settings
+- Hub create/delete, hub online/offline toggle
+- SVG logo and favicon (blue gradient circle + padlock)
+- vpncmd concurrency semaphore (max 2) for relay server compatibility
+- Debug endpoints: /api/debug/ddns, /api/debug/hub/{hub}/users, /api/debug/vcmd
