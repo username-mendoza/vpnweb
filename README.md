@@ -95,7 +95,7 @@ Generated `.p12` certificates are stored in `generated_certs/` (also excluded fr
    ```
    openvpn --show-pkcs11-ids /path/to/libykcs11.so
    ```
-4. Connect with OpenVPN community client (not OpenVPN Connect — it lacks PKCS#11 support)
+4. Connect with OpenVPN community client or OpenVPN Connect v3.3+
 
 > The YK1 patch for SoftEther is required on the server side. See [SoftEtherVPN-YK1](https://github.com/username-mendoza/SoftEtherVPN-YK1).
 
