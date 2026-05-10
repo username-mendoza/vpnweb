@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+generated_certs/
+profiles.json
+*.log
+.env

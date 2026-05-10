@@ -1,0 +1,3178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SoftEther VPN Manager</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #0f1117; color: #e0e0e0; min-height: 100vh; }
+
+  /* Login */
+  #login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .login-box { background: #1a1d27; border: 1px solid #2a2d3e; border-radius: 12px; padding: 2.5rem; width: 340px; }
+  .login-box h1 { font-size: 1.3rem; margin-bottom: 0.25rem; color: #fff; }
+  .login-box p  { font-size: 0.85rem; color: #666; margin-bottom: 1.5rem; }
+
+  /* Layout */
+  #main-screen { display: none; min-height: 100vh; flex-direction: row; }
+  #sidebar { width: 220px; background: #1a1d27; border-right: 1px solid #2a2d3e; padding: 1.25rem 0; display: flex; flex-direction: column; position: fixed; top: 0; bottom: 0; overflow: hidden; }
+  #content { margin-left: 220px; padding: 2rem; flex: 1; }
+
+  .sidebar-logo { padding: 0 1.25rem 1rem; border-bottom: 1px solid #2a2d3e; margin-bottom: 0.75rem; }
+  .sidebar-logo h2 { font-size: 1rem; color: #fff; }
+  .sidebar-logo span { font-size: 0.75rem; color: #555; }
+  .sidebar-section { font-size: 0.7rem; font-weight: 600; color: #444; text-transform: uppercase; letter-spacing: 0.08em; padding: 0.75rem 1.25rem 0.3rem; }
+  .nav-item { padding: 0.5rem 1.25rem; cursor: pointer; font-size: 0.875rem; color: #888; border-left: 2px solid transparent; transition: all 0.1s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nav-item:hover { background: #20243a; color: #ddd; }
+  .nav-item.active { background: #1e2540; color: #fff; border-left-color: #5b7fff; }
+  .nav-item.hub-nav { padding-left: 1.75rem; font-size: 0.825rem; }
+  .sidebar-bottom { margin-top: auto; padding: 1rem 1.25rem; border-top: 1px solid #2a2d3e; }
+
+  /* Inputs / buttons */
+  input, select, textarea { width: 100%; padding: 0.55rem 0.75rem; border-radius: 6px; border: 1px solid #2a2d3e; background: #0f1117; color: #e0e0e0; font-size: 0.875rem; outline: none; }
+  input:focus, select:focus { border-color: #5b7fff; }
+  .btn { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.5rem 1rem; border-radius: 6px; border: none; font-size: 0.875rem; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
+  .btn:hover { opacity: 0.82; }
+  .btn-primary { background: #5b7fff; color: #fff; }
+  .btn-danger  { background: #c0392b; color: #fff; }
+  .btn-warning { background: #d68910; color: #fff; }
+  .btn-ghost   { background: transparent; color: #aaa; border: 1px solid #2a2d3e; }
+  .btn-sm { padding: 0.3rem 0.65rem; font-size: 0.8rem; }
+  .btn-full { width: 100%; justify-content: center; margin-top: 0.85rem; }
+  .error-msg { color: #e05252; font-size: 0.82rem; margin-top: 0.4rem; min-height: 1.1em; }
+
+  /* Page header */
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+  .page-header h2 { font-size: 1.25rem; color: #fff; }
+  .breadcrumb { font-size: 0.8rem; color: #555; margin-bottom: 0.3rem; }
+  .breadcrumb a { color: #5b7fff; cursor: pointer; text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid #2a2d3e; margin-bottom: 1.5rem; }
+  .tab { padding: 0.6rem 1.1rem; font-size: 0.875rem; color: #666; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.1s; }
+  .tab:hover { color: #bbb; }
+  .tab.active { color: #fff; border-bottom-color: #5b7fff; }
+
+  /* Cards / stat grid */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.85rem; margin-bottom: 1.5rem; }
+  .stat-card { background: #1a1d27; border: 1px solid #2a2d3e; border-radius: 10px; padding: 1rem; }
+  .stat-label { font-size: 0.7rem; color: #555; text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat-value { font-size: 1.3rem; font-weight: 600; color: #fff; margin-top: 0.2rem; }
+  .stat-sub   { font-size: 0.75rem; color: #555; margin-top: 0.1rem; }
+
+  .card { background: #1a1d27; border: 1px solid #2a2d3e; border-radius: 10px; padding: 1.25rem; margin-bottom: 1rem; }
+  .card-title { font-size: 0.875rem; font-weight: 600; color: #ccc; margin-bottom: 1rem; }
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 700px) { .card-grid { grid-template-columns: 1fr; } }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th { text-align: left; padding: 0.55rem 0.75rem; color: #555; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #2a2d3e; white-space: nowrap; }
+  td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #181b28; color: #bbb; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #1e2130; }
+  .mono { font-family: monospace; font-size: 0.82rem; }
+
+  /* Badge */
+  .badge { display: inline-block; padding: 0.18rem 0.5rem; border-radius: 4px; font-size: 0.72rem; font-weight: 500; }
+  .badge-green  { background: #1a3a2a; color: #4caf7e; }
+  .badge-red    { background: #3a1a1a; color: #e05252; }
+  .badge-blue   { background: #1a2a3a; color: #5b9fff; }
+  .badge-yellow { background: #3a3010; color: #d4ac0d; }
+
+  /* Form rows */
+  .form-row { margin-bottom: 0.85rem; }
+  .form-row label { display: block; font-size: 0.78rem; color: #777; margin-bottom: 0.3rem; }
+  .form-row-inline { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.85rem; }
+  .form-row-inline label { font-size: 0.78rem; color: #777; white-space: nowrap; }
+  .toggle { position: relative; display: inline-block; width: 38px; height: 20px; flex-shrink: 0; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider { position: absolute; inset: 0; background: #2a2d3e; border-radius: 20px; cursor: pointer; transition: 0.2s; }
+  .toggle-slider:before { content: ""; position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px; background: #666; border-radius: 50%; transition: 0.2s; }
+  .toggle input:checked + .toggle-slider { background: #5b7fff; }
+  .toggle input:checked + .toggle-slider:before { transform: translateX(18px); background: #fff; }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65); align-items: center; justify-content: center; z-index: 100; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: #1a1d27; border: 1px solid #2a2d3e; border-radius: 12px; padding: 1.75rem; width: 420px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column; }
+  .modal h3 { margin-bottom: 1.25rem; color: #fff; font-size: 1rem; flex-shrink: 0; }
+  .modal-body { overflow-y: auto; flex: 1; min-height: 0; padding-right: .75rem; scrollbar-width: thin; scrollbar-color: #2a2d3e #0f1117; }
+  .modal-body::-webkit-scrollbar { width: 6px; }
+  .modal-body::-webkit-scrollbar-track { background: #0f1117; border-radius: 3px; }
+  .modal-body::-webkit-scrollbar-thumb { background: #2a2d3e; border-radius: 3px; }
+  .modal-body::-webkit-scrollbar-thumb:hover { background: #3a3f58; }
+  .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1.25rem; flex-shrink: 0; }
+
+  .loading { color: #555; font-size: 0.85rem; padding: 2rem 0; }
+  .empty   { color: #444; font-size: 0.85rem; padding: 2.5rem 0; text-align: center; }
+  .section-actions { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.85rem; }
+  .section-actions h3 { font-size: 0.9rem; color: #bbb; }
+
+  /* Loading overlay */
+  #load-overlay { display:none; position:fixed; inset:0; background:rgba(15,17,23,0.93); z-index:200; align-items:center; justify-content:center; flex-direction:column; gap:1rem; }
+  #load-overlay.show { display:flex; }
+  .spinner { width:34px; height:34px; border:3px solid #2a2d3e; border-top-color:#5b7fff; border-radius:50%; animation:spin .7s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="load-overlay">
+  <div class="spinner"></div>
+  <div id="load-msg" style="color:#888;font-size:.875rem">Connecting…</div>
+</div>
+
+<!-- Login -->
+<div id="login-screen" style="display:none">
+  <div class="login-box">
+    <div style="text-align:center;margin-bottom:1.5rem">
+      <img src="/static/logo.svg" width="160" height="45" alt="SoftEther VPN Manager" style="display:inline-block">
+    </div>
+    <p style="margin-top:-.5rem">Connect to server</p>
+    <div class="form-row">
+      <label style="font-size:.8rem;color:#888;margin-bottom:.3rem;display:block">Connection profile</label>
+      <div style="display:flex;gap:.5rem">
+        <select id="login-profile" style="flex:1"></select>
+        <button class="btn btn-ghost btn-sm" onclick="openModal('modal-profiles')" title="Manage profiles">&#9881;</button>
+      </div>
+    </div>
+    <div class="form-row">
+      <input type="password" id="login-pw" placeholder="Admin password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div class="error-msg" id="login-err"></div>
+    <button class="btn btn-primary btn-full" id="login-btn" onclick="doLogin()">Connect</button>
+  </div>
+</div>
+
+<!-- Main -->
+<div id="main-screen">
+  <div id="sidebar">
+    <div class="sidebar-logo" style="display:flex;align-items:center;gap:.6rem">
+      <img src="/static/favicon.svg" width="30" height="30" alt="" style="flex-shrink:0">
+      <div style="min-width:0">
+        <h2 style="margin:0">SoftEther</h2>
+        <span id="server-hostname">VPN Manager</span>
+      </div>
+    </div>
+    <div style="padding:.4rem 1.25rem .6rem;border-bottom:1px solid #2a2d3e;margin-bottom:.75rem;display:flex;align-items:center;justify-content:space-between">
+      <span id="active-profile-name" style="font-size:.78rem;color:#5b7fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100px"></span>
+      <div style="display:flex;gap:.3rem;flex-shrink:0">
+        <button class="btn btn-ghost btn-sm" style="font-size:.72rem;padding:2px 7px" onclick="doRefresh()" title="Reload all data">↻</button>
+        <button class="btn btn-ghost btn-sm" style="font-size:.72rem;padding:2px 7px" onclick="openModal('modal-profiles')" title="Edit connection profiles">&#9881;</button>
+        <button class="btn btn-ghost btn-sm" style="font-size:.72rem;padding:2px 6px" onclick="doLogout()" title="Switch server">Switch</button>
+      </div>
+    </div>
+    <div style="overflow-y:auto;flex:1;min-height:0">
+      <div class="sidebar-section">Server</div>
+      <div class="nav-item active" data-view="dashboard" onclick="showView('dashboard',this)">Dashboard</div>
+      <div class="nav-item" data-view="server" onclick="showView('server',this)">Server Settings</div>
+      <div class="sidebar-section">Hubs</div>
+      <div id="hub-nav-list"></div>
+      <div class="nav-item" onclick="openModal('modal-hub')" style="color:#5b7fff;font-size:0.82rem">+ New Hub</div>
+    </div>
+    <div class="sidebar-bottom">
+      <button class="btn btn-ghost btn-full" onclick="doLogout()">Disconnect</button>
+    </div>
+  </div>
+
+  <div id="content">
+    <!-- Dashboard -->
+    <div id="view-dashboard" class="view">
+      <div class="page-header"><h2>Dashboard</h2></div>
+      <div class="stat-grid" id="dash-stats"><div class="loading">Loading…</div></div>
+      <div class="card">
+        <div class="card-title">Server Info</div>
+        <table><tbody id="dash-info"></tbody></table>
+      </div>
+    </div>
+
+    <!-- Hub detail -->
+    <div id="view-hub" class="view" style="display:none">
+      <div class="breadcrumb"><a onclick="showView('dashboard')">Dashboard</a> / <span id="hub-breadcrumb"></span></div>
+      <div class="page-header">
+        <h2 id="hub-title"></h2>
+        <div style="display:flex;gap:.5rem">
+          <button class="btn btn-warning btn-sm" id="btn-hub-toggle" onclick="toggleHubOnline()"></button>
+          <button class="btn btn-danger btn-sm" onclick="deleteCurrentHub()">Delete Hub</button>
+        </div>
+      </div>
+      <div class="tabs">
+        <div class="tab active" data-tab="overview"  onclick="switchTab(this)">Overview</div>
+        <div class="tab" data-tab="users"    onclick="switchTab(this)">Users</div>
+        <div class="tab" data-tab="groups"   onclick="switchTab(this)">Groups</div>
+        <div class="tab" data-tab="sessions" onclick="switchTab(this)">Sessions</div>
+        <div class="tab" data-tab="links"    onclick="switchTab(this)">Cascade Connections</div>
+        <div class="tab" data-tab="nat"      onclick="switchTab(this)">NAT / DHCP</div>
+        <div class="tab" data-tab="acl"      onclick="switchTab(this)">Access Rules</div>
+        <div class="tab" data-tab="settings" onclick="switchTab(this)">Settings</div>
+      </div>
+
+      <!-- Overview tab -->
+      <div id="tab-overview" class="tab-pane">
+        <div class="stat-grid" id="hub-stats"></div>
+        <div class="card-grid">
+          <div class="card">
+            <div class="card-title">Traffic — Received</div>
+            <table><tbody id="hub-traffic-rx"></tbody></table>
+          </div>
+          <div class="card">
+            <div class="card-title">Traffic — Sent</div>
+            <table><tbody id="hub-traffic-tx"></tbody></table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Hub Details</div>
+          <table><tbody id="hub-details"></tbody></table>
+        </div>
+      </div>
+
+      <!-- Users tab -->
+      <div id="tab-users" class="tab-pane" style="display:none">
+        <div class="section-actions">
+          <h3>Users</h3>
+          <button class="btn btn-primary btn-sm" onclick="openNewUserModal()">+ New User</button>
+        </div>
+        <div class="card table-wrap">
+          <table>
+            <thead><tr><th>Username</th><th>Real Name</th><th>Group</th><th>Auth</th><th>Last Login</th><th>Logins</th><th></th></tr></thead>
+            <tbody id="users-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Groups tab -->
+      <div id="tab-groups" class="tab-pane" style="display:none">
+        <div class="section-actions">
+          <h3>Groups</h3>
+          <button class="btn btn-primary btn-sm" onclick="openModal('modal-group')">+ New Group</button>
+        </div>
+        <div class="card table-wrap">
+          <table>
+            <thead><tr><th>Group Name</th><th>Real Name</th><th>Note</th><th></th></tr></thead>
+            <tbody id="groups-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Sessions tab -->
+      <div id="tab-sessions" class="tab-pane" style="display:none">
+        <div class="section-actions">
+          <h3>Active Sessions</h3>
+          <div style="display:flex;gap:.5rem">
+            <button class="btn btn-ghost btn-sm" onclick="loadSessionsAll()">Refresh</button>
+            <button class="btn btn-ghost btn-sm" onclick="openMacTableModal()">MAC Table</button>
+            <button class="btn btn-ghost btn-sm" onclick="openIpTableModal()">IP Table</button>
+          </div>
+        </div>
+        <div class="card table-wrap">
+          <table>
+            <thead><tr><th>Session</th><th>Username</th><th>Client IP</th><th>Hostname</th><th>TCP</th><th>Transferred</th><th>Packets</th><th>Connected</th><th>Last Comm</th><th></th></tr></thead>
+            <tbody id="sessions-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Links tab -->
+      <div id="tab-links" class="tab-pane" style="display:none">
+        <div class="section-actions">
+          <h3>Cascade Connections</h3>
+          <div style="display:flex;gap:.5rem">
+            <button class="btn btn-ghost btn-sm" onclick="loadLinks()">Refresh</button>
+            <button class="btn btn-primary btn-sm" onclick="openNewLinkModal()">+ New Link</button>
+          </div>
+        </div>
+        <div class="card table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Server</th><th>Port</th><th>Target Hub</th><th>Username</th><th>Status</th><th>Connected</th><th></th></tr></thead>
+            <tbody id="links-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Settings tab -->
+      <div id="tab-nat" class="tab-pane" style="display:none">
+        <div class="section-actions" style="margin-bottom:1rem">
+          <h3>SecureNAT</h3>
+          <div style="display:flex;align-items:center;gap:.75rem">
+            <span id="nat-status-badge"></span>
+            <button class="btn btn-sm" id="nat-toggle-btn" onclick="toggleSecureNat()"></button>
+          </div>
+        </div>
+        <div class="card-grid" style="margin-bottom:1rem">
+          <!-- Virtual Host Network Interface -->
+          <div class="card" style="margin-bottom:0">
+            <div class="card-title">Virtual Host Network Interface</div>
+            <div class="form-row"><label>MAC address</label><input type="text" id="nat-mac" placeholder="auto" style="font-family:monospace"></div>
+            <div class="form-row"><label>IP address</label><input type="text" id="nat-ip" placeholder="192.168.30.1"></div>
+            <div class="form-row"><label>Subnet mask</label><input type="text" id="nat-mask" placeholder="255.255.255.0"></div>
+          </div>
+          <!-- Virtual NAT -->
+          <div class="card" style="margin-bottom:0">
+            <div class="card-title">Virtual NAT</div>
+            <div class="form-row-inline">
+              <label>Enable Virtual NAT</label>
+              <label class="toggle"><input type="checkbox" id="nat-use-nat"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="form-row"><label>MTU</label><input type="number" id="nat-mtu" value="1500" min="576" max="1500"></div>
+            <div class="form-row"><label>TCP session timeout (sec)</label><input type="number" id="nat-tcp-timeout" value="60"></div>
+            <div class="form-row"><label>UDP session timeout (sec)</label><input type="number" id="nat-udp-timeout" value="30"></div>
+          </div>
+        </div>
+        <!-- Virtual DHCP -->
+        <div class="card">
+          <div class="card-title">Virtual DHCP Server</div>
+          <div class="form-row-inline">
+            <label>Enable Virtual DHCP</label>
+            <label class="toggle"><input type="checkbox" id="nat-use-dhcp"><span class="toggle-slider"></span></label>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 1.5rem">
+            <div class="form-row"><label>IP range start</label><input type="text" id="nat-dhcp-start" placeholder="192.168.30.10"></div>
+            <div class="form-row"><label>IP range end</label><input type="text" id="nat-dhcp-end" placeholder="192.168.30.200"></div>
+            <div class="form-row"><label>Subnet mask</label><input type="text" id="nat-dhcp-mask" placeholder="255.255.255.0"></div>
+            <div class="form-row"><label>Default gateway</label><input type="text" id="nat-dhcp-gw" placeholder="192.168.30.1"></div>
+            <div class="form-row"><label>Primary DNS</label><input type="text" id="nat-dhcp-dns1" placeholder="8.8.8.8"></div>
+            <div class="form-row"><label>Secondary DNS</label><input type="text" id="nat-dhcp-dns2" placeholder="8.8.4.4"></div>
+            <div class="form-row"><label>Domain name</label><input type="text" id="nat-dhcp-domain" placeholder="(optional)"></div>
+            <div class="form-row"><label>Lease duration (sec)</label><input type="number" id="nat-dhcp-lease" value="7200"></div>
+          </div>
+          <div class="form-row">
+            <label>Static routes to push <span style="font-weight:400;color:#666;font-size:.78rem">network/mask/gateway, one per line</span></label>
+            <textarea id="nat-dhcp-routes" rows="3" placeholder="10.0.0.0/255.0.0.0/192.168.30.1" style="font-family:monospace;font-size:.82rem;resize:vertical"></textarea>
+          </div>
+        </div>
+        <div style="margin-top:1rem;display:flex;align-items:center;gap:.75rem">
+          <button class="btn btn-primary btn-sm" onclick="saveNatDhcp()">Save settings</button>
+          <div class="form-row-inline" style="margin:0">
+            <label style="font-size:.83rem">Save log</label>
+            <label class="toggle"><input type="checkbox" id="nat-save-log"><span class="toggle-slider"></span></label>
+          </div>
+        </div>
+        <div class="error-msg" id="nat-err"></div>
+
+        <!-- Sessions -->
+        <div class="section-actions" style="margin-top:1.5rem">
+          <h3>Active Sessions</h3>
+          <button class="btn btn-ghost btn-sm" onclick="loadNatSessions()">Refresh</button>
+        </div>
+        <div class="card-grid">
+          <div class="card table-wrap">
+            <div class="card-title">NAT Sessions</div>
+            <table><thead><tr><th>Proto</th><th>Src IP</th><th>Src Port</th><th>Dst IP</th><th>Dst Port</th><th>Sent</th><th>Recv</th></tr></thead>
+            <tbody id="nat-sessions-table"></tbody></table>
+          </div>
+          <div class="card table-wrap">
+            <div class="card-title">DHCP Leases</div>
+            <table><thead><tr><th>IP</th><th>MAC</th><th>Hostname</th><th>Expires</th></tr></thead>
+            <tbody id="dhcp-leases-table"></tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Access Rules tab -->
+      <div id="tab-acl" class="tab-pane" style="display:none">
+        <div class="section-actions">
+          <h3>Access Control Rules</h3>
+          <div style="display:flex;gap:.5rem">
+            <button class="btn btn-ghost btn-sm" onclick="loadAcl()">Refresh</button>
+            <button class="btn btn-primary btn-sm" onclick="openAddAclModal()">+ Add Rule</button>
+          </div>
+        </div>
+        <div class="card table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Note</th><th>Action</th><th>Proto</th><th>Src IP / Mask</th><th>Dst IP / Mask</th><th>Src Port</th><th>Dst Port</th><th>Active</th><th></th></tr></thead>
+            <tbody id="acl-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="tab-settings" class="tab-pane" style="display:none">
+        <div class="card-grid">
+          <!-- General -->
+          <div class="card">
+            <div class="card-title">General</div>
+            <div class="form-row"><label>Max VPN sessions <span style="font-weight:400;color:#666;font-size:.78rem">(0 = unlimited)</span></label><input type="number" id="cfg-max-session" min="0"></div>
+            <div class="form-row-inline">
+              <label>No Enumerate for Anonymous Users</label>
+              <label class="toggle"><input type="checkbox" id="cfg-no-enum"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="form-row" style="margin-top:1rem">
+              <label>Set Hub Admin Password <span style="font-weight:400;color:#666;font-size:.78rem">(leave blank to keep current)</span></label>
+              <input type="password" id="cfg-hub-pw" placeholder="New password" autocomplete="new-password">
+            </div>
+            <div class="form-row">
+              <label>Confirm Password</label>
+              <input type="password" id="cfg-hub-pw2" placeholder="Confirm new password" autocomplete="new-password">
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="saveHubConfig()">Save</button>
+            <div class="error-msg" id="cfg-err"></div>
+          </div>
+          <!-- Logging -->
+          <div class="card">
+            <div class="card-title">Logging</div>
+            <div class="form-row-inline">
+              <label>Security log</label>
+              <label class="toggle"><input type="checkbox" id="log-security"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="form-row-inline">
+              <label>Packet log</label>
+              <label class="toggle"><input type="checkbox" id="log-packet"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="form-row"><label>Log rotation</label>
+              <select id="log-switch">
+                <option value="0">No switching</option>
+                <option value="1">Hourly</option>
+                <option value="2">Daily</option>
+                <option value="3">Monthly</option>
+                <option value="4">Size (1GB)</option>
+              </select>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="saveLogConfig()">Save</button>
+            <div class="error-msg" id="log-err"></div>
+          </div>
+          <!-- RADIUS -->
+          <div class="card">
+            <div class="card-title">RADIUS Authentication</div>
+            <div class="form-row"><label>Server hostname</label><input type="text" id="rad-server" placeholder="radius.example.com"></div>
+            <div class="form-row"><label>Port</label><input type="number" id="rad-port" value="1812"></div>
+            <div class="form-row"><label>Shared secret</label><input type="password" id="rad-secret"></div>
+            <div class="form-row"><label>Retry interval (ms)</label><input type="number" id="rad-retry" value="500"></div>
+            <button class="btn btn-primary btn-sm" onclick="saveRadiusConfig()">Save</button>
+            <div class="error-msg" id="rad-err"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Server Settings view -->
+    <div id="view-server" class="view" style="display:none">
+      <div class="page-header"><h2>Server Settings</h2></div>
+      <div class="tabs">
+        <div class="tab active" data-stab="bridges"   onclick="switchSTab(this)">Local Bridges</div>
+        <div class="tab"        data-stab="listeners" onclick="switchSTab(this)">Listeners</div>
+        <div class="tab"        data-stab="protocols"  onclick="switchSTab(this)">VPN Protocols</div>
+        <div class="tab"        data-stab="syslog"    onclick="switchSTab(this)">Syslog</div>
+        <div class="tab"        data-stab="security"  onclick="switchSTab(this)">Security</div>
+        <div class="tab"        data-stab="l3"        onclick="switchSTab(this)">Layer 3 Switches</div>
+      </div>
+
+      <!-- Local Bridges -->
+      <div id="stab-bridges" class="stab-pane">
+        <div class="section-actions">
+          <h3>Local Bridges</h3>
+          <div style="display:flex;gap:.5rem">
+            <button class="btn btn-ghost btn-sm" onclick="loadBridges()">Refresh</button>
+            <button class="btn btn-primary btn-sm" onclick="openBridgeModal()">+ Add Bridge</button>
+          </div>
+        </div>
+        <div class="card table-wrap">
+          <table>
+            <thead><tr><th>Hub</th><th>NIC / Device</th><th>Mode</th><th>Active</th><th>Online</th><th></th></tr></thead>
+            <tbody id="bridges-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Listeners -->
+      <div id="stab-listeners" class="stab-pane" style="display:none">
+        <div class="section-actions">
+          <h3>TCP Listeners</h3>
+          <div style="display:flex;gap:.5rem">
+            <button class="btn btn-ghost btn-sm" onclick="loadListeners()">Refresh</button>
+            <button class="btn btn-primary btn-sm" onclick="openModal('modal-listener')">+ Add Listener</button>
+          </div>
+        </div>
+        <div class="card table-wrap">
+          <table>
+            <thead><tr><th>Port</th><th>Status</th><th>Error</th><th></th></tr></thead>
+            <tbody id="listeners-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- VPN Protocols -->
+      <div id="stab-protocols" class="stab-pane" style="display:none">
+        <div class="card-grid">
+          <div class="card">
+            <div class="card-title">IPsec / L2TP</div>
+            <div class="form-row-inline">
+              <label>L2TP (no IPsec, raw)</label>
+              <label class="toggle"><input type="checkbox" id="ipsec-l2tp-raw"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="form-row-inline">
+              <label>L2TP over IPsec</label>
+              <label class="toggle"><input type="checkbox" id="ipsec-l2tp-ipsec"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="form-row-inline">
+              <label>EtherIP / L2TPv3 over IPsec</label>
+              <label class="toggle"><input type="checkbox" id="ipsec-etherip"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="form-row"><label>IPsec Pre-Shared Key</label><input type="text" id="ipsec-secret" placeholder="shared secret"></div>
+            <div class="form-row"><label>Default Hub for L2TP</label>
+              <select id="ipsec-hub"><option value="">— None —</option></select>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="saveIpsec()">Save</button>
+            <div class="error-msg" id="ipsec-err"></div>
+          </div>
+          <div>
+            <div class="card" style="margin-bottom:1rem">
+              <div class="card-title">OpenVPN</div>
+              <div class="form-row-inline">
+                <label>Enable OpenVPN</label>
+                <label class="toggle"><input type="checkbox" id="ovpn-enable"><span class="toggle-slider"></span></label>
+              </div>
+              <div class="form-row"><label>UDP Port(s) — comma-separated</label><input type="text" id="ovpn-ports" placeholder="1194"></div>
+              <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+                <button class="btn btn-primary btn-sm" onclick="saveOpenVpn()">Save</button>
+                <button class="btn btn-ghost btn-sm" onclick="downloadOvpnSample()">Download Sample Config</button>
+              </div>
+              <div class="error-msg" id="ovpn-err"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">SSTP (Microsoft VPN)</div>
+              <div class="form-row-inline">
+                <label>Enable SSTP</label>
+                <label class="toggle"><input type="checkbox" id="sstp-enable"><span class="toggle-slider"></span></label>
+              </div>
+              <p style="font-size:0.8rem;color:#555;margin:.5rem 0">SSTP listens on TCP 443 alongside the VPN server.</p>
+              <button class="btn btn-primary btn-sm" onclick="saveOpenVpn()">Save</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Syslog -->
+      <div id="stab-syslog" class="stab-pane" style="display:none">
+        <div class="card" style="max-width:480px">
+          <div class="card-title">Syslog</div>
+          <div class="form-row"><label>Mode</label>
+            <select id="syslog-type">
+              <option value="0">Disabled</option>
+              <option value="1">Server log only</option>
+              <option value="2">Server + hub security logs</option>
+              <option value="3">Server + hub security + packet logs</option>
+            </select>
+          </div>
+          <div class="form-row"><label>Syslog Server Hostname</label><input type="text" id="syslog-host" placeholder="syslog.example.com"></div>
+          <div class="form-row"><label>Port</label><input type="number" id="syslog-port" value="514"></div>
+          <button class="btn btn-primary btn-sm" onclick="saveSyslog()">Save</button>
+          <div class="error-msg" id="syslog-err"></div>
+        </div>
+      </div>
+
+      <!-- Security -->
+      <div id="stab-security" class="stab-pane" style="display:none">
+        <div class="card-grid">
+          <div>
+            <div class="card" style="margin-bottom:1rem">
+              <div class="card-title">Change Server Admin Password</div>
+              <div class="form-row"><label>New Password</label><input type="password" id="srv-pw1"></div>
+              <div class="form-row"><label>Confirm New Password</label><input type="password" id="srv-pw2"></div>
+              <button class="btn btn-primary btn-sm" onclick="changeServerPassword()">Change Password</button>
+              <div class="error-msg" id="srv-pw-err"></div>
+            </div>
+            <div class="card">
+              <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+                VPN Azure
+                <span id="azure-status-badge" style="display:none"></span>
+              </div>
+              <div class="form-row-inline">
+                <label>Enable VPN Azure</label>
+                <label class="toggle"><input type="checkbox" id="azure-enable"><span class="toggle-slider"></span></label>
+              </div>
+              <div id="azure-hostname-row" style="display:none;margin:.5rem 0 0;font-size:.8rem;color:#888">
+                Hostname: <span id="azure-hostname" class="mono" style="color:#ccc"></span>
+              </div>
+              <p style="font-size:.8rem;color:#555;margin:.6rem 0 .85rem">VPN Azure lets clients connect without firewall configuration by relaying through the cloud.</p>
+              <button class="btn btn-primary btn-sm" onclick="saveAzure()">Save</button>
+              <div class="error-msg" id="azure-err"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Internet Connection Keep-Alive</div>
+            <div class="form-row-inline">
+              <label>Enable Keep-Alive</label>
+              <label class="toggle"><input type="checkbox" id="ka-enable"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="form-row"><label>Target Host</label><input type="text" id="ka-host" placeholder="www.google.com"></div>
+            <div class="form-row"><label>Port</label><input type="number" id="ka-port" value="80" min="1" max="65535"></div>
+            <div class="form-row"><label>Protocol</label>
+              <select id="ka-proto">
+                <option value="0">TCP</option>
+                <option value="1">UDP</option>
+              </select>
+            </div>
+            <div class="form-row"><label>Interval (sec)</label><input type="number" id="ka-interval" value="50" min="1"></div>
+            <button class="btn btn-primary btn-sm" onclick="saveKeepAlive()">Save</button>
+            <div class="error-msg" id="ka-err"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 3 Switches -->
+      <div id="stab-l3" class="stab-pane" style="display:none">
+        <div class="section-actions">
+          <h3>Layer 3 Switches</h3>
+          <button class="btn btn-primary btn-sm" onclick="openModal('modal-l3-new')">+ New Switch</button>
+        </div>
+
+        <!-- Switch list -->
+        <div class="card table-wrap" style="margin-bottom:1.5rem">
+          <table>
+            <thead><tr><th>Switch Name</th><th>Status</th><th>Interfaces</th><th>Routes</th><th></th></tr></thead>
+            <tbody id="l3-list"></tbody>
+          </table>
+        </div>
+
+        <!-- Switch detail (shown when one is selected) -->
+        <div id="l3-detail" style="display:none">
+          <div class="page-header" style="margin-bottom:1rem">
+            <h3 id="l3-detail-title" style="color:#fff;font-size:1rem"></h3>
+          </div>
+          <div class="tabs" style="margin-bottom:1.25rem">
+            <div class="tab active" data-l3tab="interfaces" onclick="switchL3Tab(this)">Interfaces</div>
+            <div class="tab" data-l3tab="routes" onclick="switchL3Tab(this)">Routing Table</div>
+          </div>
+
+          <!-- Interfaces -->
+          <div id="l3tab-interfaces">
+            <div class="section-actions">
+              <h3>Virtual Interfaces</h3>
+              <button class="btn btn-primary btn-sm" onclick="openAddIfModal()">+ Add Interface</button>
+            </div>
+            <div class="card table-wrap">
+              <table>
+                <thead><tr><th>Hub</th><th>IP Address</th><th>Subnet Mask</th><th></th></tr></thead>
+                <tbody id="l3-if-table"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Routes -->
+          <div id="l3tab-routes" style="display:none">
+            <div class="section-actions">
+              <h3>Static Routes</h3>
+              <button class="btn btn-primary btn-sm" onclick="openAddRouteModal()">+ Add Route</button>
+            </div>
+            <div class="card table-wrap">
+              <table>
+                <thead><tr><th>Network</th><th>Subnet Mask</th><th>Gateway</th><th>Metric</th><th></th></tr></thead>
+                <tbody id="l3-route-table"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Modal: New Hub -->
+<div class="modal-overlay" id="modal-hub">
+  <div class="modal">
+    <h3>Create Hub</h3>
+    <div class="form-row"><label>Hub Name</label><input type="text" id="hub-name"></div>
+    <div class="form-row"><label>Admin Password (optional)</label><input type="password" id="hub-pw"></div>
+    <div class="error-msg" id="hub-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-hub')">Cancel</button>
+      <button class="btn btn-primary" onclick="createHub()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: New User -->
+<div class="modal-overlay" id="modal-user">
+  <div class="modal" style="width:480px">
+    <h3>Create User</h3>
+    <div class="modal-body">
+      <div class="form-row"><label>Username</label><input type="text" id="user-name"></div>
+      <div class="form-row"><label>Real Name <span style="color:#555;font-weight:400">optional</span></label><input type="text" id="user-realname"></div>
+      <div class="form-row"><label>Group <span style="color:#555;font-weight:400">optional</span></label><select id="user-group"><option value="">— None —</option></select></div>
+      <div class="form-row"><label>Note <span style="color:#555;font-weight:400">optional</span></label><input type="text" id="user-note"></div>
+
+      <!-- Auth type toggle -->
+      <div class="form-row" style="display:flex;align-items:center;gap:.75rem;margin-bottom:.85rem">
+        <label style="margin:0;flex-shrink:0">Auth Type</label>
+        <div style="display:flex;gap:.4rem">
+          <button class="btn btn-primary btn-sm" id="new-user-auth-pw-btn" onclick="setNewUserAuthMode('password')">Password</button>
+          <button class="btn btn-ghost btn-sm" id="new-user-auth-cert-btn" onclick="setNewUserAuthMode('cert')">Certificate</button>
+        </div>
+      </div>
+
+      <!-- Password section -->
+      <div id="user-pw-section">
+        <div class="form-row"><label>Password</label><input type="password" id="user-pw"></div>
+        <div class="form-row"><label>Confirm Password</label><input type="password" id="user-pw2"></div>
+      </div>
+
+      <!-- Certificate section -->
+      <div id="user-cert-section" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-bottom:.6rem">
+          <button class="btn btn-ghost btn-sm" onclick="toggleNewCertPanel('specify')">Specify Certificate</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleNewCertPanel('generate')">Generate Certificate</button>
+        </div>
+        <div id="user-cert-panel" style="display:none;background:#0f1117;border:1px solid #2a2d3e;border-radius:8px;padding:.85rem;margin-bottom:.6rem">
+          <!-- Specify -->
+          <div id="user-cert-panel-specify" style="display:none">
+            <div class="form-row"><label>Certificate file (.crt / .pem)</label><input type="file" id="user-cert-file" accept=".crt,.pem,.cer" onchange="onNewCertFileChange()" style="padding:.3rem"></div>
+            <div style="text-align:center;font-size:.78rem;color:#444;margin:.15rem 0 .5rem">— or paste PEM —</div>
+            <div class="form-row"><textarea id="user-cert-pem" rows="4" style="font-family:monospace;font-size:.73rem;resize:vertical" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"></textarea></div>
+          </div>
+          <!-- Generate -->
+          <div id="user-cert-panel-generate" style="display:none">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+              <div class="form-row"><label>CN <span style="color:#555;font-weight:400">Common Name</span></label><input type="text" id="user-gen-cn" placeholder="same as username"></div>
+              <div class="form-row"><label>O <span style="color:#555;font-weight:400">Organization</span></label><input type="text" id="user-gen-o"></div>
+              <div class="form-row"><label>OU <span style="color:#555;font-weight:400">Org Unit</span></label><input type="text" id="user-gen-ou"></div>
+              <div class="form-row"><label>C <span style="color:#555;font-weight:400">Country (2 letters)</span></label><input type="text" id="user-gen-c" maxlength="2" style="text-transform:uppercase"></div>
+              <div class="form-row"><label>ST <span style="color:#555;font-weight:400">State / Province</span></label><input type="text" id="user-gen-st"></div>
+              <div class="form-row"><label>L <span style="color:#555;font-weight:400">Locality / City</span></label><input type="text" id="user-gen-l"></div>
+              <div class="form-row"><label>Validity (days)</label><input type="number" id="user-gen-days" value="1825" min="1" max="3650"></div>
+              <div class="form-row"><label>Key size</label><select id="user-gen-keysize"><option value="2048">RSA 2048</option><option value="4096">RSA 4096</option></select></div>
+            </div>
+            <p style="font-size:.77rem;color:#555;margin:.4rem 0 0">The .p12 will be saved on the server. After creation, open the user to download it. Import into YubiKey: <code style="font-size:.73rem">ykman piv certificates import 9a user.p12</code></p>
+          </div>
+        </div>
+        <p id="user-cert-hint" style="font-size:.78rem;color:#555;margin:0 0 .6rem">Choose how to provide the certificate above.</p>
+      </div>
+
+      <div class="error-msg" id="user-err"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-user')">Cancel</button>
+      <button class="btn btn-primary" onclick="createUser()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Edit User -->
+<div class="modal-overlay" id="modal-edit-user">
+  <div class="modal" style="width:500px">
+    <h3>Edit User — <span id="edit-user-title"></span></h3>
+    <div class="modal-body">
+      <div class="form-row"><label>Real Name</label><input type="text" id="edit-user-realname"></div>
+      <div class="form-row"><label>Group</label><select id="edit-user-group"><option value="">— None —</option></select></div>
+      <div class="form-row"><label>Note</label><input type="text" id="edit-user-note"></div>
+      <div class="form-row" style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem">
+        <label style="margin:0;flex-shrink:0">Auth Type</label>
+        <span id="edit-user-auth-badge" class="badge badge-blue"></span>
+      </div>
+
+      <!-- Password auth section -->
+      <div id="edit-user-pw-section">
+        <div class="form-row"><label>New Password <span style="color:#555;font-weight:400">(blank = keep current)</span></label><input type="password" id="edit-user-pw" placeholder="unchanged"></div>
+        <div class="form-row"><label>Confirm Password</label><input type="password" id="edit-user-pw2" placeholder="unchanged"></div>
+      </div>
+
+      <!-- Cert auth section -->
+      <div id="edit-user-cert-section" style="display:none">
+        <!-- Cert info card -->
+        <div style="background:#0f1117;border:1px solid #2a2d3e;border-radius:8px;padding:.85rem;margin-bottom:.75rem;font-size:.83rem;line-height:1.7">
+          <div id="edit-user-cert-card"></div>
+        </div>
+        <!-- action buttons -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-bottom:.75rem">
+          <button class="btn btn-ghost btn-sm" onclick="toggleCertPanel('specify')">Specify Certificate</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleCertPanel('generate')">Generate Certificate</button>
+          <button class="btn btn-ghost btn-sm" id="cert-btn-view" onclick="toggleCertPanel('view')">View Certificate</button>
+          <button class="btn btn-ghost btn-sm" id="cert-btn-export" onclick="exportUserCert()">Export Certificate</button>
+          <button class="btn btn-ghost btn-sm" id="cert-btn-p12" onclick="downloadP12()" style="display:none;grid-column:span 2">⬇ Download .p12</button>
+        </div>
+        <p id="cert-p12-hint" style="display:none;font-size:.76rem;color:#555;margin:-.4rem 0 .75rem">Import into YubiKey: <code style="font-size:.73rem">ykman piv certificates import 9a user.p12</code></p>
+        <!-- Toggled action panel -->
+        <div id="edit-user-cert-panel" style="display:none;background:#0f1117;border:1px solid #2a2d3e;border-radius:8px;padding:.85rem;margin-bottom:.75rem">
+          <!-- Specify -->
+          <div id="cert-panel-specify" style="display:none">
+            <div class="form-row"><label>Certificate file (.crt / .pem)</label><input type="file" id="edit-user-cert-file" accept=".crt,.pem,.cer" onchange="onCertFileChange()" style="padding:.3rem"></div>
+            <div style="text-align:center;font-size:.78rem;color:#444;margin:.15rem 0 .5rem">— or paste PEM —</div>
+            <div class="form-row"><textarea id="edit-user-cert-pem" rows="4" style="font-family:monospace;font-size:.73rem;resize:vertical" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"></textarea></div>
+            <button class="btn btn-primary btn-sm" onclick="uploadUserCert()">Set Certificate</button>
+          </div>
+          <!-- Generate -->
+          <div id="cert-panel-generate" style="display:none">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+              <div class="form-row"><label>CN <span style="color:#555;font-weight:400">Common Name</span></label><input type="text" id="gen-cert-cn" placeholder="same as username"></div>
+              <div class="form-row"><label>O <span style="color:#555;font-weight:400">Organization</span></label><input type="text" id="gen-cert-o"></div>
+              <div class="form-row"><label>OU <span style="color:#555;font-weight:400">Org Unit</span></label><input type="text" id="gen-cert-ou"></div>
+              <div class="form-row"><label>C <span style="color:#555;font-weight:400">Country (2 letters)</span></label><input type="text" id="gen-cert-c" maxlength="2" style="text-transform:uppercase"></div>
+              <div class="form-row"><label>ST <span style="color:#555;font-weight:400">State / Province</span></label><input type="text" id="gen-cert-st"></div>
+              <div class="form-row"><label>L <span style="color:#555;font-weight:400">Locality / City</span></label><input type="text" id="gen-cert-l"></div>
+              <div class="form-row"><label>Validity (days)</label><input type="number" id="gen-cert-days" value="1825" min="1" max="3650"></div>
+              <div class="form-row"><label>Key size</label><select id="gen-cert-keysize"><option value="2048">RSA 2048</option><option value="4096">RSA 4096</option></select></div>
+            </div>
+            <p style="font-size:.77rem;color:#555;margin:.4rem 0 .65rem">The .p12 will be saved on the server. Use the Download .p12 button to retrieve it. Import into YubiKey: <code style="font-size:.73rem">ykman piv certificates import 9a user.p12</code></p>
+            <button class="btn btn-primary btn-sm" onclick="generateUserCert()">Generate Certificate</button>
+          </div>
+          <!-- View -->
+          <div id="cert-panel-view" style="display:none">
+            <table id="cert-view-table" style="width:100%;font-size:.8rem;border-collapse:collapse"></table>
+          </div>
+        </div>
+
+        <!-- OpenVPN config -->
+        <div style="border-top:1px solid #2a2d3e;padding-top:.85rem;margin-bottom:.85rem">
+          <div style="font-size:.72rem;font-weight:600;color:#444;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.6rem">OpenVPN Config</div>
+          <div class="form-row"><label>pkcs11-id</label><input type="text" id="edit-user-pkcs11-id" placeholder="pkcs11:model=YubiKey%20YK5;...;id=%01" style="font-family:monospace;font-size:.77rem"></div>
+          <div class="form-row"><label>Remote host <span style="color:#555;font-weight:400">(optional — overrides profile host)</span></label><input type="text" id="edit-user-remote-host" placeholder="auto"></div>
+          <button class="btn btn-ghost btn-sm" onclick="downloadUserOvpn()">⬇ Download .ovpn</button>
+        </div>
+
+        <!-- Revoke -->
+        <div style="border-top:1px solid #2a2d3e;padding-top:.85rem">
+          <div style="font-size:.72rem;font-weight:600;color:#444;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.6rem">Revoke Certificate</div>
+          <div class="form-row"><label>New password (required to revert to password auth)</label><input type="password" id="edit-user-revoke-pw"></div>
+          <button class="btn btn-danger btn-sm" onclick="revokeUserCert()">Revoke Certificate</button>
+        </div>
+      </div>
+
+      <div class="error-msg" id="edit-user-err" style="margin-top:.75rem"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-edit-user')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUser()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: New Group -->
+<div class="modal-overlay" id="modal-group">
+  <div class="modal">
+    <h3>Create Group</h3>
+    <div class="form-row"><label>Group Name</label><input type="text" id="group-name"></div>
+    <div class="form-row"><label>Real Name (optional)</label><input type="text" id="group-realname"></div>
+    <div class="form-row"><label>Note (optional)</label><input type="text" id="group-note"></div>
+    <div class="error-msg" id="group-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-group')">Cancel</button>
+      <button class="btn btn-primary" onclick="createGroup()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Edit Group -->
+<div class="modal-overlay" id="modal-edit-group">
+  <div class="modal">
+    <h3>Edit Group — <span id="edit-group-title"></span></h3>
+    <div class="form-row"><label>Real Name</label><input type="text" id="edit-group-realname"></div>
+    <div class="form-row"><label>Note</label><input type="text" id="edit-group-note"></div>
+    <div class="error-msg" id="edit-group-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-edit-group')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveGroup()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: New L3 Switch -->
+<div class="modal-overlay" id="modal-l3-new">
+  <div class="modal">
+    <h3>Create L3 Switch</h3>
+    <div class="form-row"><label>Switch Name</label><input type="text" id="l3-new-name" placeholder="SW1"></div>
+    <div class="error-msg" id="l3-new-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-l3-new')">Cancel</button>
+      <button class="btn btn-primary" onclick="createL3Switch()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add L3 Interface -->
+<div class="modal-overlay" id="modal-l3-if">
+  <div class="modal">
+    <h3>Add Virtual Interface</h3>
+    <div class="form-row"><label>Hub</label><select id="l3-if-hub"></select></div>
+    <div class="form-row"><label>IP Address</label><input type="text" id="l3-if-ip" placeholder="192.168.1.1"></div>
+    <div class="form-row"><label>Subnet Mask</label><input type="text" id="l3-if-mask" placeholder="255.255.255.0"></div>
+    <div class="error-msg" id="l3-if-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-l3-if')">Cancel</button>
+      <button class="btn btn-primary" onclick="addL3Interface()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add L3 Route -->
+<div class="modal-overlay" id="modal-l3-route">
+  <div class="modal">
+    <h3>Add Static Route</h3>
+    <div class="form-row"><label>Network Address</label><input type="text" id="l3-rt-net" placeholder="10.0.0.0"></div>
+    <div class="form-row"><label>Subnet Mask</label><input type="text" id="l3-rt-mask" placeholder="255.0.0.0"></div>
+    <div class="form-row"><label>Gateway</label><input type="text" id="l3-rt-gw" placeholder="192.168.1.254"></div>
+    <div class="form-row"><label>Metric</label><input type="number" id="l3-rt-metric" value="1" min="1"></div>
+    <div class="error-msg" id="l3-rt-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-l3-route')">Cancel</button>
+      <button class="btn btn-primary" onclick="addL3Route()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add Local Bridge -->
+<div class="modal-overlay" id="modal-bridge">
+  <div class="modal">
+    <h3>Add Local Bridge</h3>
+    <div class="form-row"><label>Hub Name</label><select id="bridge-hub"></select></div>
+    <div class="form-row"><label>Network Interface (NIC)</label><select id="bridge-nic"></select></div>
+    <div class="form-row-inline">
+      <label>Use TAP (virtual) device</label>
+      <label class="toggle"><input type="checkbox" id="bridge-tap" onchange="toggleBridgeTap()"><span class="toggle-slider"></span></label>
+    </div>
+    <div class="form-row" id="bridge-tap-name-row" style="display:none"><label>TAP device name</label><input type="text" id="bridge-tap-name" placeholder="tap_vpn"></div>
+    <div class="error-msg" id="bridge-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-bridge')">Cancel</button>
+      <button class="btn btn-primary" onclick="createBridge()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add Listener -->
+<div class="modal-overlay" id="modal-listener">
+  <div class="modal">
+    <h3>Add TCP Listener</h3>
+    <div class="form-row"><label>Port</label><input type="number" id="listener-port" value="1194" min="1" max="65535"></div>
+    <div class="error-msg" id="listener-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-listener')">Cancel</button>
+      <button class="btn btn-primary" onclick="createListener()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: New/Edit Link -->
+<div class="modal-overlay" id="modal-link">
+  <div class="modal" style="width:500px">
+    <h3 id="link-modal-title">New Cascade Link</h3>
+    <div class="card-grid" style="gap:.75rem">
+      <div>
+        <div class="form-row"><label>Link Name</label><input type="text" id="link-name"></div>
+        <div class="form-row"><label>Server Hostname / IP</label><input type="text" id="link-host" placeholder="vpn.example.com"></div>
+        <div class="form-row"><label>Port</label>
+          <select id="link-port"></select>
+        </div>
+        <div class="form-row">
+          <label style="display:flex;align-items:center;justify-content:space-between">
+            Destination Hub
+            <button type="button" class="btn btn-ghost btn-sm" style="padding:.15rem .5rem;font-size:.73rem" onclick="fetchRemoteHubs()" id="link-hub-fetch">Fetch list</button>
+          </label>
+          <input type="text" id="link-hub" placeholder="DEFAULT">
+          <select id="link-hub-sel" style="display:none;margin-top:.4rem" onchange="document.getElementById('link-hub').value=this.value"></select>
+          <div class="error-msg" id="link-hub-err" style="min-height:0;margin-top:.3rem"></div>
+        </div>
+        <div class="form-row"><label>Username</label><input type="text" id="link-user"></div>
+        <div class="form-row"><label>Password</label><input type="password" id="link-pw"></div>
+        <div class="form-row"><label>Confirm Password</label><input type="password" id="link-pw2"></div>
+      </div>
+      <div>
+        <div class="form-row"><label>Max Connections</label><input type="number" id="link-maxconn" value="8" min="1" max="32"></div>
+        <div class="form-row"><label>Retry Interval (sec)</label><input type="number" id="link-retry" value="15" min="1"></div>
+        <div class="form-row-inline" style="margin-top:.5rem">
+          <label>Connect immediately</label>
+          <label class="toggle"><input type="checkbox" id="link-online"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="form-row-inline">
+          <label>Use encryption</label>
+          <label class="toggle"><input type="checkbox" id="link-encrypt" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div class="form-row-inline">
+          <label>Use compression</label>
+          <label class="toggle"><input type="checkbox" id="link-compress"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="form-row-inline">
+          <label>Verify server cert</label>
+          <label class="toggle"><input type="checkbox" id="link-cert"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="form-row-inline">
+          <label>Half connection</label>
+          <label class="toggle"><input type="checkbox" id="link-half"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="form-row-inline">
+          <label>No UDP acceleration</label>
+          <label class="toggle"><input type="checkbox" id="link-noudp"><span class="toggle-slider"></span></label>
+        </div>
+      </div>
+    </div>
+    <div class="error-msg" id="link-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-link')">Cancel</button>
+      <button class="btn btn-primary" id="link-submit-btn" onclick="submitLink()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Session Detail -->
+<div class="modal-overlay" id="modal-session" onclick="if(event.target===this)closeModal('modal-session')">
+  <div class="modal" style="width:700px;max-width:95vw">
+    <h3 id="session-modal-title">Session</h3>
+    <div class="modal-body">
+      <div id="session-modal-info" style="display:grid;grid-template-columns:1fr 1fr;gap:.25rem .75rem;font-size:.85rem;margin-bottom:1.25rem"></div>
+      <div class="card-title" style="margin-bottom:.5rem">Per-Session MAC &amp; IP</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div>
+          <div style="font-size:.78rem;color:#888;margin-bottom:.3rem">MAC Addresses</div>
+          <div class="table-wrap"><table style="font-size:.82rem">
+            <thead><tr><th>MAC</th><th>VLAN</th><th>Updated</th></tr></thead>
+            <tbody id="session-mac-table"></tbody>
+          </table></div>
+        </div>
+        <div>
+          <div style="font-size:.78rem;color:#888;margin-bottom:.3rem">IP Addresses</div>
+          <div class="table-wrap"><table style="font-size:.82rem">
+            <thead><tr><th>IP</th><th>DHCP</th><th>Updated</th></tr></thead>
+            <tbody id="session-ip-table"></tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-session')">Close</button>
+      <button class="btn btn-danger" id="session-disconnect-btn" onclick="disconnectSessionFromModal()">Disconnect</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Hub MAC Table -->
+<div class="modal-overlay" id="modal-mac-table" onclick="if(event.target===this)closeModal('modal-mac-table')">
+  <div class="modal" style="width:750px;max-width:95vw">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0;margin-bottom:1rem">
+      <h3 style="margin:0">Hub MAC Address Table</h3>
+      <button class="btn btn-ghost btn-sm" onclick="loadMacTable()">Refresh</button>
+    </div>
+    <div class="modal-body table-wrap"><table>
+      <thead><tr><th>MAC Address</th><th>Session</th><th>VLAN</th><th>Created</th><th>Updated</th></tr></thead>
+      <tbody id="mac-table"></tbody>
+    </table></div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('modal-mac-table')">Close</button></div>
+  </div>
+</div>
+
+<!-- Modal: Hub IP Table -->
+<div class="modal-overlay" id="modal-ip-table" onclick="if(event.target===this)closeModal('modal-ip-table')">
+  <div class="modal" style="width:700px;max-width:95vw">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0;margin-bottom:1rem">
+      <h3 style="margin:0">Hub IP Address Table</h3>
+      <button class="btn btn-ghost btn-sm" onclick="loadIpTable()">Refresh</button>
+    </div>
+    <div class="modal-body table-wrap"><table>
+      <thead><tr><th>IP Address</th><th>Session</th><th>DHCP</th><th>Created</th><th>Updated</th></tr></thead>
+      <tbody id="ip-table"></tbody>
+    </table></div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('modal-ip-table')">Close</button></div>
+  </div>
+</div>
+
+<!-- Modal: Add ACL Rule -->
+<div class="modal-overlay" id="modal-acl" onclick="if(event.target===this)closeModal('modal-acl')">
+  <div class="modal" style="width:560px">
+    <h3>Add Access Rule</h3>
+    <div class="modal-body">
+      <div class="card-grid" style="gap:.75rem">
+        <div>
+          <div class="form-row"><label>Note / Name</label><input type="text" id="acl-note" placeholder="rule name"></div>
+          <div class="form-row"><label>Priority <span style="font-weight:400;color:#666;font-size:.78rem">(lower = higher priority)</span></label><input type="number" id="acl-priority" value="100" min="1"></div>
+          <div class="form-row"><label>Action</label>
+            <select id="acl-action">
+              <option value="pass">Pass (Allow)</option>
+              <option value="discard">Discard (Block)</option>
+            </select>
+          </div>
+          <div class="form-row"><label>Protocol</label>
+            <select id="acl-proto">
+              <option value="0">All</option>
+              <option value="1">ICMP</option>
+              <option value="6">TCP</option>
+              <option value="17">UDP</option>
+            </select>
+          </div>
+          <div class="form-row-inline" style="margin-top:.5rem">
+            <label>Active</label>
+            <label class="toggle"><input type="checkbox" id="acl-active" checked><span class="toggle-slider"></span></label>
+          </div>
+        </div>
+        <div>
+          <div class="form-row"><label>Source IP</label><input type="text" id="acl-src-ip" placeholder="0.0.0.0" value="0.0.0.0"></div>
+          <div class="form-row"><label>Source Mask</label><input type="text" id="acl-src-mask" placeholder="0.0.0.0" value="0.0.0.0"></div>
+          <div class="form-row"><label>Dest IP</label><input type="text" id="acl-dst-ip" placeholder="0.0.0.0" value="0.0.0.0"></div>
+          <div class="form-row"><label>Dest Mask</label><input type="text" id="acl-dst-mask" placeholder="0.0.0.0" value="0.0.0.0"></div>
+          <div class="form-row"><label>Src Port Range <span style="font-weight:400;color:#666;font-size:.78rem">TCP/UDP only</span></label>
+            <div style="display:flex;gap:.5rem;align-items:center">
+              <input type="number" id="acl-src-port0" placeholder="0" value="0" min="0" max="65535" style="width:48%">
+              <span style="color:#666">–</span>
+              <input type="number" id="acl-src-port1" placeholder="65535" value="65535" min="0" max="65535" style="width:48%">
+            </div>
+          </div>
+          <div class="form-row"><label>Dst Port Range <span style="font-weight:400;color:#666;font-size:.78rem">TCP/UDP only</span></label>
+            <div style="display:flex;gap:.5rem;align-items:center">
+              <input type="number" id="acl-dst-port0" placeholder="0" value="0" min="0" max="65535" style="width:48%">
+              <span style="color:#666">–</span>
+              <input type="number" id="acl-dst-port1" placeholder="65535" value="65535" min="0" max="65535" style="width:48%">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="error-msg" id="acl-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-acl')">Cancel</button>
+      <button class="btn btn-primary" onclick="addAclRule()">Add Rule</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Connection Profiles -->
+<div class="modal-overlay" id="modal-profiles" onclick="if(event.target===this)closeModal('modal-profiles')">
+  <div class="modal" style="width:520px;max-width:95vw">
+    <h3>Connection Profiles</h3>
+    <div class="modal-body">
+      <div id="profiles-list" style="margin-bottom:1rem"></div>
+      <div id="profile-form" style="display:none;background:#12141e;border:1px solid #2a2d3e;border-radius:8px;padding:1rem;margin-top:.5rem">
+        <div class="card-title" id="profile-form-title" style="margin-bottom:.75rem">New Profile</div>
+        <div class="form-row"><label>Profile name</label><input type="text" id="pf-name" placeholder="My VPN Server"></div>
+        <div class="form-row"><label>Primary hostname / IP</label><input type="text" id="pf-host" placeholder="vpn.example.com"></div>
+        <div class="form-row"><label>Primary port</label><input type="number" id="pf-port" value="5555" min="1" max="65535"></div>
+        <div style="border-top:1px solid #2a2d3e;margin:.75rem 0 .5rem;padding-top:.5rem;font-size:.8rem;color:#888">Secondary address (optional — tried if primary is unreachable)</div>
+        <div class="form-row"><label>Secondary hostname / IP</label><input type="text" id="pf-host2" placeholder="abc.vpnazure.net or relay IP"></div>
+        <div class="form-row"><label>Secondary port</label><input type="number" id="pf-port2" value="5555" min="1" max="65535"></div>
+        <div class="error-msg" id="pf-err"></div>
+        <div style="display:flex;gap:.5rem;margin-top:.75rem">
+          <button class="btn btn-primary btn-sm" onclick="saveProfile()">Save</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('profile-form').style.display='none'">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="showProfileForm()">+ Add Profile</button>
+      <button class="btn btn-ghost" onclick="closeModal('modal-profiles')">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- API helper with GET cache ----
+const _apiCache = new Map();
+
+const api = async (method, path, body) => {
+  if (method === 'GET' && body === undefined) {
+    if (_apiCache.has(path)) return _apiCache.get(path);
+  }
+  const opts = { method, headers: {'Content-Type':'application/json'}, credentials: 'include' };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  if (r.status === 401) { showLogin(); return null; }
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || 'Error'); }
+  const data = await r.json();
+  if (method === 'GET' && body === undefined) _apiCache.set(path, data);
+  return data;
+};
+
+function invalidateCache(...paths) {
+  if (!paths.length) { _apiCache.clear(); return; }
+  paths.forEach(p => _apiCache.delete(p));
+}
+
+function showLoadingOverlay(msg) {
+  document.getElementById('load-msg').textContent = msg || 'Loading…';
+  document.getElementById('load-overlay').classList.add('show');
+}
+function hideLoadingOverlay() {
+  document.getElementById('load-overlay').classList.remove('show');
+}
+
+function fmt(n) { return n != null ? Number(n).toLocaleString() : '–'; }
+function fmtBytes(b) {
+  if (b == null) return '–';
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  if (b < 1073741824) return (b/1048576).toFixed(1) + ' MB';
+  return (b/1073741824).toFixed(2) + ' GB';
+}
+function fmtDate(d) {
+  if (!d || d.startsWith('1970')) return '–';
+  return new Date(d).toLocaleString();
+}
+function b64toMac(b64) {
+  try {
+    const bin = atob(b64);
+    return Array.from(bin.slice(0,6), c => c.charCodeAt(0).toString(16).padStart(2,'0')).join(':').toUpperCase();
+  } catch { return b64; }
+}
+function infoRows(pairs) {
+  return pairs.map(([k,v]) => `<tr><td style="color:#555;width:170px;white-space:nowrap">${k}</td><td class="mono">${v ?? '–'}</td></tr>`).join('');
+}
+
+// ---- Auth & Profiles ----
+let currentHub = null;
+let currentTab = 'overview';
+let currentSTab = 'bridges';
+let _profiles = [];
+let _editingProfileId = null;
+
+async function init() {
+  await loadProfilesIntoUI();
+  const sess = await fetch('/api/session/info', {credentials: 'include'}).then(r => r.json()).catch(() => ({}));
+  if (sess.authenticated) {
+    document.getElementById('active-profile-name').textContent = sess.profile_name || '';
+    showMain();
+  } else {
+    showLogin();
+  }
+}
+document.addEventListener('DOMContentLoaded', init);
+
+async function loadProfilesIntoUI() {
+  _profiles = await fetch('/api/profiles', {credentials: 'include'}).then(r => r.json()).catch(() => []);
+  const sel = document.getElementById('login-profile');
+  const prev = sel.value;
+  sel.innerHTML = _profiles.map(p => `<option value="${p.id}">${p.name} — ${p.host}:${p.port}</option>`).join('');
+  if (prev && _profiles.find(p => p.id === prev)) sel.value = prev;
+  renderProfilesList();
+}
+
+function renderProfilesList() {
+  const el = document.getElementById('profiles-list');
+  if (!el) return;
+  if (!_profiles.length) { el.innerHTML = '<div style="color:#666;font-size:.85rem">No profiles yet.</div>'; return; }
+  el.innerHTML = _profiles.map(p => `
+    <div style="display:flex;align-items:center;gap:.5rem;padding:.5rem 0;border-bottom:1px solid #2a2d3e">
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:.88rem">${p.name}</div>
+        <div style="font-size:.78rem;color:#888;font-family:monospace">${p.host}:${p.port}</div>
+        ${p.host2 ? `<div style="font-size:.75rem;color:#666;font-family:monospace">↳ ${p.host2}:${p.port2||5555}</div>` : ''}
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="editProfile('${p.id}')">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteProfile('${p.id}')">Delete</button>
+    </div>`).join('');
+}
+
+function showProfileForm(id) {
+  _editingProfileId = id || null;
+  const form = document.getElementById('profile-form');
+  const title = document.getElementById('profile-form-title');
+  document.getElementById('pf-err').textContent = '';
+  if (id) {
+    const p = _profiles.find(x => x.id === id);
+    title.textContent = 'Edit Profile';
+    document.getElementById('pf-name').value = p.name;
+    document.getElementById('pf-host').value = p.host;
+    document.getElementById('pf-port').value = p.port;
+    document.getElementById('pf-host2').value = p.host2 || '';
+    document.getElementById('pf-port2').value = p.port2 || 5555;
+  } else {
+    title.textContent = 'New Profile';
+    document.getElementById('pf-name').value = '';
+    document.getElementById('pf-host').value = '';
+    document.getElementById('pf-port').value = '5555';
+    document.getElementById('pf-host2').value = '';
+    document.getElementById('pf-port2').value = '5555';
+  }
+  form.style.display = '';
+}
+
+function editProfile(id) { showProfileForm(id); }
+
+async function saveProfile() {
+  const name = document.getElementById('pf-name').value.trim();
+  const host = document.getElementById('pf-host').value.trim();
+  const port = parseInt(document.getElementById('pf-port').value) || 5555;
+  const host2 = document.getElementById('pf-host2').value.trim();
+  const port2 = parseInt(document.getElementById('pf-port2').value) || 5555;
+  const errEl = document.getElementById('pf-err');
+  errEl.textContent = '';
+  if (!name || !host) { errEl.textContent = 'Name and primary hostname are required.'; return; }
+  const payload = {name, host, port, host2, port2};
+  try {
+    const url = _editingProfileId ? `/api/profiles/${_editingProfileId}` : '/api/profiles';
+    const method = _editingProfileId ? 'PUT' : 'POST';
+    const r = await fetch(url, {method, headers:{'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify(payload)});
+    if (!r.ok) { const d = await r.json().catch(() => ({})); errEl.textContent = d.detail || 'Save failed'; return; }
+    document.getElementById('profile-form').style.display = 'none';
+    await loadProfilesIntoUI();
+  } catch(e) { errEl.textContent = e.message; }
+}
+
+async function deleteProfile(id) {
+  if (!confirm('Delete this profile?')) return;
+  const r = await fetch(`/api/profiles/${id}`, {method:'DELETE', credentials: 'include'});
+  if (!r.ok) { const d = await r.json(); alert(d.detail || 'Error'); return; }
+  await loadProfilesIntoUI();
+}
+
+async function doLogin() {
+  const pw = document.getElementById('login-pw').value;
+  const profile_id = document.getElementById('login-profile').value;
+  document.getElementById('login-err').textContent = '';
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true;
+  btn.textContent = 'Connecting…';
+  try {
+    const resp = await fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify({password: pw, profile_id})});
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) { document.getElementById('login-err').textContent = data.detail || 'Login failed'; return; }
+    invalidateCache();
+    document.getElementById('active-profile-name').textContent = data?.profile_name || '';
+    showMain();
+  } catch(e) { document.getElementById('login-err').textContent = e.message; }
+  finally { btn.disabled = false; btn.textContent = 'Connect'; }
+}
+async function doLogout() { await api('POST', '/api/logout'); invalidateCache(); showLogin(); }
+
+function showLogin() {
+  loadProfilesIntoUI();
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('main-screen').style.display  = 'none';
+  document.getElementById('login-pw').value = '';
+  setTimeout(() => document.getElementById('login-pw').focus(), 50);
+}
+function showMain() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('main-screen').style.display = 'flex';
+  loadAllData();
+}
+
+async function loadAllData() {
+  showLoadingOverlay('Connecting to server…');
+  try {
+    // One bulk request covers all server data
+    const bulk = await api('GET', '/api/server/all').catch(() => null);
+    if (bulk) {
+      _apiCache.set('/api/server/info',      bulk.info      || {});
+      _apiCache.set('/api/server/status',    bulk.status    || {});
+      _apiCache.set('/api/server/ddns',      bulk.ddns      || {});
+      _apiCache.set('/api/hubs',             bulk.hubs      || []);
+      _apiCache.set('/api/server/listeners', bulk.listeners || []);
+      _apiCache.set('/api/server/ipsec',     bulk.ipsec     || {});
+      _apiCache.set('/api/server/openvpn',   bulk.openvpn   || {});
+      _apiCache.set('/api/server/syslog',    bulk.syslog    || {});
+      _apiCache.set('/api/server/bridges',   bulk.bridges   || []);
+      _apiCache.set('/api/server/ethernet',  bulk.ethernet  || []);
+      _apiCache.set('/api/l3',               bulk.l3        || []);
+    }
+    const info = bulk?.info;
+    if (info) document.getElementById('server-hostname').textContent = info.ServerHostName_str || '';
+    const hubs = bulk?.hubs || [];
+    document.getElementById('hub-nav-list').innerHTML = hubs.map(h =>
+      `<div class="nav-item hub-nav" onclick="openHub('${h.HubName_str}', this)">${h.HubName_str}</div>`
+    ).join('');
+    if (hubs.length) {
+      showLoadingOverlay(`Loading ${hubs.length} hub(s)…`);
+      await Promise.all(hubs.map(h => _loadHubAllData(h.HubName_str)));
+    }
+  } catch(e) { console.error('loadAllData error:', e); }
+  hideLoadingOverlay();
+  restoreFromHash();
+}
+
+async function _loadHubAllData(hub) {
+  const e = enc(hub);
+  const bulk = await api('GET', `/api/hubs/${e}/all`).catch(() => null);
+  if (!bulk) return;
+  _apiCache.set(`/api/hubs/${e}/status`,    bulk.status   || {});
+  _apiCache.set(`/api/hubs/${e}/config`,    bulk.config   || {});
+  _apiCache.set(`/api/hubs/${e}/users`,     bulk.users    || []);
+  _apiCache.set(`/api/hubs/${e}/groups`,    bulk.groups   || []);
+  _apiCache.set(`/api/hubs/${e}/sessions`,  bulk.sessions || []);
+  _apiCache.set(`/api/hubs/${e}/links`,     bulk.links    || []);
+  _apiCache.set(`/api/hubs/${e}/mac-table`, bulk.mac      || []);
+  _apiCache.set(`/api/hubs/${e}/ip-table`,  bulk.ip       || []);
+  _apiCache.set(`/api/hubs/${e}/log`,       bulk.log      || {});
+  _apiCache.set(`/api/hubs/${e}/radius`,    bulk.radius   || {});
+  _apiCache.set(`/api/hubs/${e}/securenat`, bulk.securenat|| {});
+}
+
+async function doRefresh() {
+  invalidateCache();
+  await loadAllData();
+}
+
+function restoreFromHash() {
+  const hash = decodeURIComponent(location.hash.slice(1)) || 'dashboard';
+  const parts = hash.split('/');
+  if (parts[0] === 'hub' && parts[1]) {
+    const navEl = [...document.querySelectorAll('.nav-item.hub-nav')]
+      .find(el => el.textContent.trim() === parts[1]);
+    openHub(parts[1], navEl);
+    if (parts[2]) {
+      const tabEl = document.querySelector(`.tab[data-tab="${parts[2]}"]`);
+      if (tabEl) switchTab(tabEl);
+    }
+  } else if (parts[0] === 'server') {
+    const navEl = document.querySelector('[data-view="server"]');
+    showView('server', navEl);
+    if (parts[1]) {
+      const tabEl = document.querySelector(`[data-stab="${parts[1]}"]`);
+      if (tabEl) switchSTab(tabEl);
+    }
+  } else {
+    const navEl = document.querySelector('[data-view="dashboard"]');
+    showView('dashboard', navEl);
+  }
+}
+
+// ---- Views ----
+function showView(name, navEl) {
+  document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
+  const el = document.getElementById('view-' + name);
+  if (el) el.style.display = '';
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (navEl) navEl.classList.add('active');
+  if (name === 'dashboard') { location.hash = 'dashboard'; loadDashboard(); }
+  if (name === 'server') {
+    document.querySelectorAll('.stab-pane').forEach(p => p.style.display = 'none');
+    document.getElementById('stab-bridges').style.display = '';
+    document.querySelectorAll('[data-stab]').forEach(t => t.classList.toggle('active', t.dataset.stab === 'bridges'));
+    currentSTab = 'bridges';
+    location.hash = 'server/bridges';
+    loadBridges();
+  }
+}
+
+function openHub(hubName, navEl) {
+  currentHub = hubName;
+  currentTab = 'overview';
+  location.hash = 'hub/' + encodeURIComponent(hubName) + '/overview';
+  document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
+  document.getElementById('view-hub').style.display = '';
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (navEl) navEl.classList.add('active');
+  document.getElementById('hub-breadcrumb').textContent = hubName;
+  document.getElementById('hub-title').textContent = hubName;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'overview'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+  document.getElementById('tab-overview').style.display = '';
+  loadHubOverview();
+}
+
+function switchTab(el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const tab = el.dataset.tab;
+  currentTab = tab;
+  location.hash = 'hub/' + encodeURIComponent(currentHub) + '/' + tab;
+  document.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+  document.getElementById('tab-' + tab).style.display = '';
+  if (tab === 'overview')  loadHubOverview();
+  if (tab === 'users')     loadUsers();
+  if (tab === 'groups')    loadGroups();
+  if (tab === 'sessions')  loadSessionsAll();
+  if (tab === 'links')     loadLinks();
+  if (tab === 'nat')       loadNatDhcp();
+  if (tab === 'acl')       loadAcl();
+  if (tab === 'settings')  loadSettings();
+}
+
+// ---- Dashboard ----
+async function loadDashboard() {
+  const [info, status, ddns] = await Promise.all([
+    api('GET', '/api/server/info'),
+    api('GET', '/api/server/status'),
+    api('GET', '/api/server/ddns'),
+  ]);
+  if (!info || !status) return;
+  document.getElementById('server-hostname').textContent = info.ServerHostName_str || '';
+
+  const ddnsFqdn  = ddns?.DnsName_str || '–';
+  const azureFqdn = ddns?.AzureHostname_str || '–';
+  const ipv4      = ddns?.CurrentIPv4_str || '–';
+
+  document.getElementById('dash-stats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Hubs</div><div class="stat-value">${fmt(status.NumHubTotal_u32)}</div></div>
+    <div class="stat-card"><div class="stat-label">Users</div><div class="stat-value">${fmt(status.NumUsers_u32)}</div></div>
+    <div class="stat-card"><div class="stat-label">Sessions</div><div class="stat-value">${fmt(status.NumSessionsTotal_u32)}</div></div>
+    <div class="stat-card"><div class="stat-label">TCP Connections</div><div class="stat-value">${fmt(status.NumTcpConnections_u32)}</div></div>
+  `;
+  document.getElementById('dash-info').innerHTML = infoRows([
+    ['Server Name',    info.ServerHostName_str],
+    ['Version',        info.ServerVersionString_str],
+    ['Build',          info.ServerBuildInfoString_str],
+    ['OS',             info.OsProductName_str + ' ' + (info.OsVersion_str || '')],
+    ['Kernel',         info.KernelVersion_str],
+    ['Public IP',      ipv4],
+    ['DDNS Hostname',  ddnsFqdn],
+    ['VPN Azure Host', azureFqdn],
+  ]);
+}
+
+// ---- Hub nav ----
+async function loadHubNav() {
+  const hubs = await api('GET', '/api/hubs');
+  if (!hubs) return;
+  document.getElementById('hub-nav-list').innerHTML = hubs.map(h =>
+    `<div class="nav-item hub-nav" onclick="openHub('${h.HubName_str}', this)">${h.HubName_str}</div>`
+  ).join('');
+  return hubs;
+}
+
+// ---- Hub overview ----
+async function loadHubOverview() {
+  const [status, config] = await Promise.all([
+    api('GET', `/api/hubs/${enc(currentHub)}/status`),
+    api('GET', `/api/hubs/${enc(currentHub)}/config`),
+  ]);
+  if (!status || !config) return;
+
+  const btn = document.getElementById('btn-hub-toggle');
+  if (status.Online_bool) {
+    btn.textContent = 'Set Offline'; btn.className = 'btn btn-warning btn-sm';
+  } else {
+    btn.textContent = 'Set Online'; btn.className = 'btn btn-primary btn-sm';
+  }
+
+  document.getElementById('hub-stats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Status</div><div class="stat-value">${status.Online_bool ? '🟢' : '🔴'} ${status.Online_bool ? 'Online' : 'Offline'}</div></div>
+    <div class="stat-card"><div class="stat-label">Users</div><div class="stat-value">${fmt(status.NumUsers_u32)}</div></div>
+    <div class="stat-card"><div class="stat-label">Sessions</div><div class="stat-value">${fmt(status.NumSessions_u32)}</div></div>
+    <div class="stat-card"><div class="stat-label">MAC Entries</div><div class="stat-value">${fmt(status.NumMacTables_u32)}</div></div>
+    <div class="stat-card"><div class="stat-label">IP Entries</div><div class="stat-value">${fmt(status.NumIpTables_u32)}</div></div>
+    <div class="stat-card"><div class="stat-label">Total Logins</div><div class="stat-value">${fmt(status.NumLogin_u32)}</div></div>
+  `;
+
+  document.getElementById('hub-traffic-rx').innerHTML = infoRows([
+    ['Unicast Packets',   fmt(status['Recv.UnicastCount_u64'])],
+    ['Unicast Bytes',     fmtBytes(status['Recv.UnicastBytes_u64'])],
+    ['Broadcast Packets', fmt(status['Recv.BroadcastCount_u64'])],
+    ['Broadcast Bytes',   fmtBytes(status['Recv.BroadcastBytes_u64'])],
+  ]);
+  document.getElementById('hub-traffic-tx').innerHTML = infoRows([
+    ['Unicast Packets',   fmt(status['Send.UnicastCount_u64'])],
+    ['Unicast Bytes',     fmtBytes(status['Send.UnicastBytes_u64'])],
+    ['Broadcast Packets', fmt(status['Send.BroadcastCount_u64'])],
+    ['Broadcast Bytes',   fmtBytes(status['Send.BroadcastBytes_u64'])],
+  ]);
+  document.getElementById('hub-details').innerHTML = infoRows([
+    ['Hub Type',      ['Standalone','Static','Dynamic'][status.HubType_u32] || status.HubType_u32],
+    ['SecureNAT',     status.SecureNATEnabled_bool ? 'Enabled' : 'Disabled'],
+    ['Max Sessions',  config.MaxSession_u32 === 0 ? 'Unlimited' : fmt(config.MaxSession_u32)],
+    ['Hidden',        config.NoEnum_bool ? 'Yes' : 'No'],
+    ['Created',       fmtDate(status.CreatedTime_dt)],
+    ['Last Login',    fmtDate(status.LastLoginTime_dt)],
+    ['Last Comm',     fmtDate(status.LastCommTime_dt)],
+  ]);
+}
+
+// ---- Users ----
+async function loadUsers() {
+  const data = await api('GET', `/api/hubs/${enc(currentHub)}/users`);
+  if (!data) return;
+  const tb = document.getElementById('users-table');
+  if (!data.length) { tb.innerHTML = `<tr><td colspan="7" class="empty">No users</td></tr>`; return; }
+  tb.innerHTML = data.map(u => `<tr>
+    <td><strong>${u.Name_str}</strong></td>
+    <td>${u.Realname_utf || '–'}</td>
+    <td>${u.GroupName_str ? `<span class="badge badge-yellow">${u.GroupName_str}</span>` : '–'}</td>
+    <td><span class="badge badge-blue">${authType(u.AuthType_u32)}</span></td>
+    <td>${fmtDate(u.LastLoginTime_dt)}</td>
+    <td>${fmt(u.NumLogin_u32)}</td>
+    <td style="display:flex;gap:.35rem">
+      <button class="btn btn-ghost btn-sm" onclick="openEditUser('${u.Name_str}')">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.Name_str}')">Delete</button>
+    </td>
+  </tr>`).join('');
+}
+function authType(t) { return {0:'Anonymous',1:'Password',2:'UserCert',3:'RootCert',4:'Radius',5:'NT'}[t] ?? t; }
+
+let editingUser = null;
+let _certPanelMode = null;
+let _editUserCertInfo = null;
+
+async function openEditUser(name) {
+  editingUser = name;
+  _certPanelMode = null;
+  _editUserCertInfo = null;
+  document.getElementById('edit-user-title').textContent = name;
+  document.getElementById('edit-user-err').textContent = '';
+  ['edit-user-pw','edit-user-pw2','edit-user-pkcs11-id','edit-user-revoke-pw','edit-user-remote-host'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('edit-user-cert-pem').value = '';
+  document.getElementById('edit-user-cert-file').value = '';
+  document.getElementById('edit-user-cert-panel').style.display = 'none';
+  invalidateCache(`/api/hubs/${enc(currentHub)}/users/${enc(name)}`);
+  const [user, groups] = await Promise.all([
+    api('GET', `/api/hubs/${enc(currentHub)}/users/${enc(name)}`),
+    api('GET', `/api/hubs/${enc(currentHub)}/groups`),
+  ]);
+  if (!user) return;
+  document.getElementById('edit-user-realname').value = user.Realname_utf || '';
+  document.getElementById('edit-user-note').value     = user.Note_utf || '';
+  populateGroupSelect('edit-user-group', groups || [], user.GroupName_str || '');
+  const isCert = user.AuthType_u32 === 2;
+  document.getElementById('edit-user-auth-badge').textContent = authType(user.AuthType_u32);
+  document.getElementById('edit-user-pw-section').style.display   = isCert ? 'none' : '';
+  document.getElementById('edit-user-cert-section').style.display = isCert ? '' : 'none';
+  _showP12Btn(isCert && user.has_p12);
+  if (isCert) {
+    _editUserCertInfo = user.cert_info || null;
+    _updateCertCard(_editUserCertInfo);
+    document.getElementById('gen-cert-cn').value = user.cert_info?.cn || name;
+  } else {
+    document.getElementById('gen-cert-cn').value = name;
+  }
+  openModal('modal-edit-user');
+}
+
+function _updateCertCard(ci) {
+  const el = document.getElementById('edit-user-cert-card');
+  if (!ci || !ci.cn) { el.innerHTML = '<span style="color:#555">No certificate registered</span>'; return; }
+  const d = s => (s||'?').slice(0,10);
+  el.innerHTML = `<div style="display:grid;grid-template-columns:auto 1fr;gap:.15rem .75rem;align-items:baseline">
+    <span style="color:#555">Subject</span><span>${ci.subject || 'CN='+ci.cn}</span>
+    <span style="color:#555">Valid</span><span>${d(ci.valid_from)} → ${d(ci.valid_to)}</span>
+    <span style="color:#555">SHA-256</span><span style="font-family:monospace;font-size:.72rem;word-break:break-all">${ci.fingerprint}</span>
+  </div>`;
+}
+
+function toggleCertPanel(mode) {
+  const panel = document.getElementById('edit-user-cert-panel');
+  if (_certPanelMode === mode) {
+    panel.style.display = 'none';
+    _certPanelMode = null;
+  } else {
+    ['specify','generate','view'].forEach(m =>
+      document.getElementById(`cert-panel-${m}`).style.display = m === mode ? '' : 'none');
+    panel.style.display = '';
+    _certPanelMode = mode;
+    if (mode === 'view') _renderCertView(_editUserCertInfo);
+    if (mode === 'generate' && !document.getElementById('gen-cert-cn').value)
+      document.getElementById('gen-cert-cn').value = editingUser;
+  }
+}
+
+function _renderCertView(ci) {
+  const tb = document.getElementById('cert-view-table');
+  if (!ci?.cn) { tb.innerHTML = '<tr><td colspan="2" style="color:#555">No certificate</td></tr>'; return; }
+  const rows = [
+    ['Subject',            ci.subject || `CN=${ci.cn}`],
+    ['Issuer',             ci.issuer  || (ci.issuer_cn ? `CN=${ci.issuer_cn}` : '—')],
+    ['Self-signed',        ci.self_signed ? 'Yes' : 'No'],
+    ['Version',            ci.version ? `X.509 v${ci.version}` : '—'],
+    ['Serial',             ci.serial_hex || ci.serial || '—'],
+    ['Not Before',         ci.valid_from || '—'],
+    ['Not After',          ci.valid_to   || '—'],
+    ['Public Key',         ci.key_bits ? `${ci.key_algorithm} ${ci.key_bits} bit` : (ci.key_algorithm||'—')],
+    ['Signature Alg',      ci.sig_algorithm || '—'],
+    ['SHA-256 Fingerprint',ci.fingerprint   || '—'],
+    ['SHA-1 Fingerprint',  ci.fingerprint_sha1 || '—'],
+  ];
+  if (ci.extensions?.length) {
+    rows.push(['— Extensions —', '']);
+    for (const [k,v] of ci.extensions) rows.push([k, v]);
+  }
+  const tdL = `style="color:#888;padding:.25rem .7rem .25rem 0;white-space:nowrap;vertical-align:top;font-size:.78rem"`;
+  const tdR = `style="padding:.25rem 0;font-family:monospace;font-size:.75rem;word-break:break-all"`;
+  tb.innerHTML = rows.map(([k,v]) => v === ''
+    ? `<tr><td colspan="2" style="color:#444;padding:.4rem 0 .15rem;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase">${k}</td></tr>`
+    : `<tr><td ${tdL}>${k}</td><td ${tdR}>${v}</td></tr>`
+  ).join('');
+}
+
+function onCertFileChange() {
+  const f = document.getElementById('edit-user-cert-file').files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = e => { document.getElementById('edit-user-cert-pem').value = e.target.result; };
+  r.readAsText(f);
+}
+
+async function saveUser() {
+  document.getElementById('edit-user-err').textContent = '';
+  const body = {
+    realname: document.getElementById('edit-user-realname').value.trim(),
+    note:     document.getElementById('edit-user-note').value.trim(),
+    group:    document.getElementById('edit-user-group').value,
+  };
+  const pw  = document.getElementById('edit-user-pw').value;
+  const pw2 = document.getElementById('edit-user-pw2').value;
+  if (pw || pw2) {
+    if (pw !== pw2) { document.getElementById('edit-user-err').textContent = 'Passwords do not match'; return; }
+    body.password = pw;
+  }
+  try {
+    await api('PUT', `/api/hubs/${enc(currentHub)}/users/${enc(editingUser)}`, body);
+    closeModal('modal-edit-user');
+    invalidateCache(`/api/hubs/${enc(currentHub)}/users`);
+    loadUsers();
+  } catch(e) { document.getElementById('edit-user-err').textContent = e.message; }
+}
+
+let _newUserAuthMode = 'password';
+let _newUserCertPanel = null;
+
+async function openNewUserModal() {
+  document.getElementById('user-err').textContent = '';
+  ['user-name','user-pw','user-pw2','user-realname','user-note','user-cert-pem','user-gen-cn','user-gen-o','user-gen-ou','user-gen-c','user-gen-st','user-gen-l'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('user-cert-file').value = '';
+  document.getElementById('user-gen-days').value = '1825';
+  document.getElementById('user-gen-keysize').value = '2048';
+  _newUserAuthMode = 'password';
+  _newUserCertPanel = null;
+  document.getElementById('user-pw-section').style.display = '';
+  document.getElementById('user-cert-section').style.display = 'none';
+  document.getElementById('user-cert-panel').style.display = 'none';
+  document.getElementById('new-user-auth-pw-btn').className = 'btn btn-primary btn-sm';
+  document.getElementById('new-user-auth-cert-btn').className = 'btn btn-ghost btn-sm';
+  const groups = await api('GET', `/api/hubs/${enc(currentHub)}/groups`);
+  populateGroupSelect('user-group', groups || [], '');
+  openModal('modal-user');
+}
+
+function setNewUserAuthMode(mode) {
+  _newUserAuthMode = mode;
+  _newUserCertPanel = null;
+  document.getElementById('user-pw-section').style.display = mode === 'password' ? '' : 'none';
+  document.getElementById('user-cert-section').style.display = mode === 'cert' ? '' : 'none';
+  document.getElementById('user-cert-panel').style.display = 'none';
+  document.getElementById('new-user-auth-pw-btn').className = mode === 'password' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  document.getElementById('new-user-auth-cert-btn').className = mode === 'cert' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  document.getElementById('user-err').textContent = '';
+}
+
+function toggleNewCertPanel(mode) {
+  const panel = document.getElementById('user-cert-panel');
+  if (_newUserCertPanel === mode) {
+    panel.style.display = 'none';
+    _newUserCertPanel = null;
+  } else {
+    ['specify','generate'].forEach(m =>
+      document.getElementById(`user-cert-panel-${m}`).style.display = m === mode ? '' : 'none');
+    panel.style.display = '';
+    _newUserCertPanel = mode;
+  }
+  document.getElementById('user-cert-hint').style.display = _newUserCertPanel ? 'none' : '';
+}
+
+function onNewCertFileChange() {
+  const file = document.getElementById('user-cert-file').files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { document.getElementById('user-cert-pem').value = e.target.result; };
+  reader.readAsText(file);
+}
+
+function _fmtApiErr(e) {
+  const m = e.message || '';
+  if (m.includes('Error code 66') || m.toLowerCase().includes('already exists')) return 'A user with that username already exists on this hub.';
+  return m;
+}
+
+async function createUser() {
+  const name  = document.getElementById('user-name').value.trim();
+  const real  = document.getElementById('user-realname').value.trim();
+  const group = document.getElementById('user-group').value;
+  const note  = document.getElementById('user-note').value.trim();
+  const err   = document.getElementById('user-err');
+  err.textContent = '';
+  if (!name) { err.textContent = 'Username required'; return; }
+
+  if (_newUserAuthMode === 'password') {
+    const pw  = document.getElementById('user-pw').value;
+    const pw2 = document.getElementById('user-pw2').value;
+    if (!pw)        { err.textContent = 'Password required'; return; }
+    if (pw !== pw2) { err.textContent = 'Passwords do not match'; return; }
+    try {
+      await api('POST', `/api/hubs/${enc(currentHub)}/users`, {username:name, password:pw, realname:real, group, note});
+      closeModal('modal-user');
+      invalidateCache(`/api/hubs/${enc(currentHub)}/users`);
+      loadUsers();
+    } catch(e) { err.textContent = _fmtApiErr(e); }
+    return;
+  }
+
+  // Certificate auth
+  if (!_newUserCertPanel) { err.textContent = 'Choose Specify or Generate for the certificate'; return; }
+  if (_newUserCertPanel === 'specify' && !document.getElementById('user-cert-pem').value.trim()) {
+    err.textContent = 'No certificate provided — upload a file or paste PEM'; return;
+  }
+
+  // Create user with random placeholder password (cert auth users don't use it)
+  const placeholder = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2) + Date.now().toString(36);
+  try {
+    await api('POST', `/api/hubs/${enc(currentHub)}/users`, {username:name, password:placeholder, realname:real, group, note});
+  } catch(e) { err.textContent = _fmtApiErr(e); return; }
+
+  try {
+    if (_newUserCertPanel === 'specify') {
+      const pem = document.getElementById('user-cert-pem').value.trim();
+      await api('POST', `/api/hubs/${enc(currentHub)}/users/${enc(name)}/cert`, {cert_pem: pem});
+    } else {
+      const cn      = document.getElementById('user-gen-cn').value.trim() || name;
+      const o       = document.getElementById('user-gen-o').value.trim();
+      const ou      = document.getElementById('user-gen-ou').value.trim();
+      const c       = document.getElementById('user-gen-c').value.trim().toUpperCase();
+      const st      = document.getElementById('user-gen-st').value.trim();
+      const l       = document.getElementById('user-gen-l').value.trim();
+      const days    = parseInt(document.getElementById('user-gen-days').value) || 1825;
+      const keySize = parseInt(document.getElementById('user-gen-keysize').value) || 2048;
+      await api('POST', `/api/hubs/${enc(currentHub)}/users/${enc(name)}/cert/generate`,
+        {cn, o, ou, c, st, l, days, key_size: keySize});
+    }
+    closeModal('modal-user');
+    invalidateCache(`/api/hubs/${enc(currentHub)}/users`);
+    loadUsers();
+  } catch(e) {
+    // Cert step failed — clean up the partially-created user to keep state consistent
+    await api('DELETE', `/api/hubs/${enc(currentHub)}/users/${enc(name)}`).catch(()=>{});
+    invalidateCache(`/api/hubs/${enc(currentHub)}/users`);
+    loadUsers();
+    err.textContent = 'Certificate setup failed: ' + _fmtApiErr(e) + ' (user was not created)';
+  }
+}
+
+async function deleteUser(name) {
+  if (!confirm(`Delete user "${name}"?`)) return;
+  await api('DELETE', `/api/hubs/${enc(currentHub)}/users/${enc(name)}`);
+  invalidateCache(`/api/hubs/${enc(currentHub)}/users`);
+  loadUsers();
+}
+
+async function uploadUserCert() {
+  const pem = document.getElementById('edit-user-cert-pem').value.trim();
+  const err = document.getElementById('edit-user-err');
+  err.textContent = '';
+  if (!pem) { err.textContent = 'No certificate provided'; return; }
+  try {
+    const info = await api('POST', `/api/hubs/${enc(currentHub)}/users/${enc(editingUser)}/cert`, {cert_pem: pem});
+    _editUserCertInfo = info;
+    _updateCertCard(info);
+    document.getElementById('edit-user-cert-pem').value = '';
+    document.getElementById('edit-user-cert-file').value = '';
+    document.getElementById('edit-user-auth-badge').textContent = authType(2);
+    document.getElementById('edit-user-pw-section').style.display = 'none';
+    document.getElementById('edit-user-cert-section').style.display = '';
+    toggleCertPanel('specify');
+    invalidateCache(`/api/hubs/${enc(currentHub)}/users`);
+    loadUsers();
+  } catch(e) { err.textContent = e.message; }
+}
+
+async function generateUserCert() {
+  const cn      = document.getElementById('gen-cert-cn').value.trim() || editingUser;
+  const o       = document.getElementById('gen-cert-o').value.trim();
+  const ou      = document.getElementById('gen-cert-ou').value.trim();
+  const c       = document.getElementById('gen-cert-c').value.trim().toUpperCase();
+  const st      = document.getElementById('gen-cert-st').value.trim();
+  const l       = document.getElementById('gen-cert-l').value.trim();
+  const days    = parseInt(document.getElementById('gen-cert-days').value) || 1825;
+  const keySize = parseInt(document.getElementById('gen-cert-keysize').value) || 2048;
+  const err     = document.getElementById('edit-user-err');
+  err.textContent = '';
+  try {
+    await api('POST', `/api/hubs/${enc(currentHub)}/users/${enc(editingUser)}/cert/generate`,
+      {cn, o, ou, c, st, l, days, key_size: keySize});
+    invalidateCache(`/api/hubs/${enc(currentHub)}/users`, `/api/hubs/${enc(currentHub)}/users/${enc(editingUser)}`);
+    const user = await api('GET', `/api/hubs/${enc(currentHub)}/users/${enc(editingUser)}`);
+    if (user?.cert_info) {
+      _editUserCertInfo = user.cert_info;
+      _updateCertCard(user.cert_info);
+      document.getElementById('edit-user-auth-badge').textContent = authType(2);
+      document.getElementById('edit-user-pw-section').style.display = 'none';
+      document.getElementById('edit-user-cert-section').style.display = '';
+    }
+    _showP12Btn(user?.has_p12);
+    toggleCertPanel('generate');
+    loadUsers();
+  } catch(e) { err.textContent = e.message; }
+}
+
+function _showP12Btn(has) {
+  document.getElementById('cert-btn-p12').style.display  = has ? '' : 'none';
+  document.getElementById('cert-p12-hint').style.display = has ? '' : 'none';
+}
+
+function downloadP12() {
+  const a = document.createElement('a');
+  a.href = `/api/hubs/${enc(currentHub)}/users/${enc(editingUser)}/cert/p12`;
+  a.click();
+}
+
+function exportUserCert() {
+  const a = document.createElement('a');
+  a.href = `/api/hubs/${enc(currentHub)}/users/${enc(editingUser)}/cert/export`;
+  a.download = `${editingUser}_${currentHub}.crt`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+async function revokeUserCert() {
+  const pw  = document.getElementById('edit-user-revoke-pw').value;
+  const err = document.getElementById('edit-user-err');
+  err.textContent = '';
+  if (!pw) { err.textContent = 'Enter a new password to revert to password auth'; return; }
+  if (!confirm(`Revoke certificate for "${editingUser}" and switch to password auth?`)) return;
+  try {
+    await api('DELETE', `/api/hubs/${enc(currentHub)}/users/${enc(editingUser)}/cert`, {password: pw});
+    invalidateCache(`/api/hubs/${enc(currentHub)}/users`);
+    closeModal('modal-edit-user');
+    loadUsers();
+  } catch(e) { err.textContent = e.message; }
+}
+
+async function downloadUserOvpn() {
+  const pkcs11Id   = document.getElementById('edit-user-pkcs11-id').value.trim();
+  const remoteHost = document.getElementById('edit-user-remote-host').value.trim();
+  const err        = document.getElementById('edit-user-err');
+  err.textContent  = '';
+  if (!pkcs11Id) { err.textContent = "Enter the user's YubiKey pkcs11-id"; return; }
+  let url = `/api/hubs/${enc(currentHub)}/users/${enc(editingUser)}/ovpn?pkcs11_id=${encodeURIComponent(pkcs11Id)}`;
+  if (remoteHost) url += `&remote_host=${encodeURIComponent(remoteHost)}`;
+  const a = document.createElement('a');
+  a.href = url; a.download = `${editingUser}_${currentHub}.ovpn`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+function populateGroupSelect(selId, groups, current) {
+  const sel = document.getElementById(selId);
+  sel.innerHTML = '<option value="">— None —</option>' +
+    groups.map(g => `<option value="${g.Name_str}"${g.Name_str===current?' selected':''}>${g.Name_str}</option>`).join('');
+}
+
+// ---- Groups ----
+async function loadGroups() {
+  const data = await api('GET', `/api/hubs/${enc(currentHub)}/groups`);
+  if (!data) return;
+  const tb = document.getElementById('groups-table');
+  if (!data.length) { tb.innerHTML = `<tr><td colspan="4" class="empty">No groups — create one to assign users</td></tr>`; return; }
+  tb.innerHTML = data.map(g => `<tr>
+    <td><strong>${g.Name_str}</strong></td>
+    <td>${g.Realname_utf || '–'}</td>
+    <td style="color:#666">${g.Note_utf || '–'}</td>
+    <td style="display:flex;gap:.35rem">
+      <button class="btn btn-ghost btn-sm" onclick="openEditGroup('${g.Name_str}','${(g.Realname_utf||'').replace(/'/g,"\\'")}','${(g.Note_utf||'').replace(/'/g,"\\'")}')">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteGroup('${g.Name_str}')">Delete</button>
+    </td>
+  </tr>`).join('');
+}
+
+function openEditGroup(name, realname, note) {
+  document.getElementById('edit-group-title').textContent = name;
+  document.getElementById('edit-group-realname').value = realname;
+  document.getElementById('edit-group-note').value = note;
+  document.getElementById('edit-group-err').textContent = '';
+  document.getElementById('edit-group-title').dataset.name = name;
+  openModal('modal-edit-group');
+}
+
+async function saveGroup() {
+  const name = document.getElementById('edit-group-title').dataset.name;
+  document.getElementById('edit-group-err').textContent = '';
+  try {
+    await api('PUT', `/api/hubs/${enc(currentHub)}/groups/${enc(name)}`, {
+      realname: document.getElementById('edit-group-realname').value.trim(),
+      note:     document.getElementById('edit-group-note').value.trim(),
+    });
+    closeModal('modal-edit-group');
+    invalidateCache(`/api/hubs/${enc(currentHub)}/groups`);
+    loadGroups();
+  } catch(e) { document.getElementById('edit-group-err').textContent = e.message; }
+}
+
+async function createGroup() {
+  const name  = document.getElementById('group-name').value.trim();
+  const real  = document.getElementById('group-realname').value.trim();
+  const note  = document.getElementById('group-note').value.trim();
+  document.getElementById('group-err').textContent = '';
+  if (!name) { document.getElementById('group-err').textContent = 'Name required'; return; }
+  try {
+    await api('POST', `/api/hubs/${enc(currentHub)}/groups`, {name, realname:real, note});
+    closeModal('modal-group');
+    ['group-name','group-realname','group-note'].forEach(id => document.getElementById(id).value = '');
+    invalidateCache(`/api/hubs/${enc(currentHub)}/groups`);
+    loadGroups();
+  } catch(e) { document.getElementById('group-err').textContent = e.message; }
+}
+
+async function deleteGroup(name) {
+  if (!confirm(`Delete group "${name}"?`)) return;
+  await api('DELETE', `/api/hubs/${enc(currentHub)}/groups/${enc(name)}`);
+  invalidateCache(`/api/hubs/${enc(currentHub)}/groups`);
+  loadGroups();
+}
+
+// ---- Sessions ----
+let _macData = [], _ipData = [];
+
+async function loadSessionsAll() {
+  invalidateCache(
+    `/api/hubs/${enc(currentHub)}/sessions`,
+    `/api/hubs/${enc(currentHub)}/mac-table`,
+    `/api/hubs/${enc(currentHub)}/ip-table`
+  );
+  await Promise.all([loadSessions(), loadMacTable(), loadIpTable()]);
+}
+
+async function loadSessions() {
+  const data = await api('GET', `/api/hubs/${enc(currentHub)}/sessions`);
+  if (!data) return;
+  const tb = document.getElementById('sessions-table');
+  if (!data.length) { tb.innerHTML = `<tr><td colspan="10" class="empty">No active sessions</td></tr>`; return; }
+  tb.innerHTML = data.map(s => {
+    const typeIcon = s.LinkMode_bool    ? ' <span class="badge" style="background:#555">Cascade</span>'
+                   : s.SecureNATMode_bool ? ' <span class="badge" style="background:#2a6">SecureNAT</span>'
+                   : s.BridgeMode_bool   ? ' <span class="badge" style="background:#555">Bridge</span>'
+                   : s.Layer3Mode_bool   ? ' <span class="badge" style="background:#555">L3</span>' : '';
+    const dormant = s.IsDormant_bool ? ' <span class="badge" style="background:#665500">Dormant</span>' : '';
+    const nameEsc = s.Name_str.replace(/'/g,"\\'");
+    return `<tr style="cursor:pointer" onclick="openSessionModal('${nameEsc}')">
+    <td class="mono" style="white-space:nowrap">${s.Name_str}${typeIcon}${dormant}</td>
+    <td>${s.Username_str || '–'}</td>
+    <td class="mono">${resolveIp(s)}</td>
+    <td>${s.Hostname_str || '–'}</td>
+    <td style="text-align:right">${fmt(s.CurrentNumTcp_u32)}</td>
+    <td style="text-align:right">${fmtBytes(s.PacketSize_u64)}</td>
+    <td style="text-align:right">${fmt(s.PacketNum_u64)}</td>
+    <td style="white-space:nowrap">${fmtDate(s.CreatedTime_dt)}</td>
+    <td style="white-space:nowrap">${fmtDate(s.LastCommTime_dt)}</td>
+    <td onclick="event.stopPropagation()"><button class="btn btn-danger btn-sm" onclick="disconnectSession('${nameEsc}')">Disconnect</button></td>
+  </tr>`;
+  }).join('');
+}
+
+async function openSessionModal(name) {
+  document.getElementById('session-modal-title').textContent = name;
+  document.getElementById('session-disconnect-btn').dataset.name = name;
+  document.getElementById('session-modal-info').innerHTML = '<div style="color:#888;grid-column:1/-1">Loading…</div>';
+  document.getElementById('session-mac-table').innerHTML = '';
+  document.getElementById('session-ip-table').innerHTML = '';
+  openModal('modal-session');
+
+  const [st, macs, ips] = await Promise.all([
+    api('GET', `/api/hubs/${enc(currentHub)}/sessions/${enc(name)}`),
+    Promise.resolve(_macData.filter(m => m.SessionName_str === name)),
+    Promise.resolve(_ipData.filter(i  => i.SessionName_str  === name)),
+  ]);
+
+  if (st) {
+    const bool = v => v ? '<span class="badge badge-green">Yes</span>' : '<span style="color:#666">No</span>';
+    document.getElementById('session-modal-info').innerHTML = [
+      ['Username',        st.Username_str],
+      ['Real Username',   st.RealUsername_str],
+      ['Group',           st.GroupName_str],
+      ['Client IP',       st.Client_Ip_Address_ip || st.SessionStatus_ClientIp_ip],
+      ['Client Hostname', st.SessionStatus_ClientHostName_str || st.ClientHostname_str],
+      ['Client Product',  st.ClientProductName_str],
+      ['Client OS',       st.ClientOsName_str],
+      ['Cipher',          st.CipherName_str],
+      ['Protocol',        st.ProtocolDetails_str || st.UnderlayProtocol_str],
+      ['Encryption',      bool(st.UseEncrypt_bool)],
+      ['Compression',     bool(st.UseCompress_bool)],
+      ['UDP Accel',       bool(st.IsUsingUdpAcceleration_bool)],
+      ['TCP connections', fmt(st.NumTcpConnections_u32)],
+      ['Sent',            fmtBytes(st.TotalSendSize_u64)],
+      ['Received',        fmtBytes(st.TotalRecvSize_u64)],
+      ['Send (unicast)',  fmtBytes(st['Send.UnicastBytes_u64'])],
+      ['Recv (unicast)',  fmtBytes(st['Recv.UnicastBytes_u64'])],
+      ['Send (bcast)',    fmtBytes(st['Send.BroadcastBytes_u64'])],
+      ['Recv (bcast)',    fmtBytes(st['Recv.BroadcastBytes_u64'])],
+      ['Connected',       fmtDate(st.StartTime_dt)],
+      ['VLAN ID',         st.VLanId_u32 || '–'],
+    ].filter(([,v]) => v != null && v !== '' && v !== '–')
+     .map(([k,v]) => `<div style="color:#888">${k}</div><div>${v}</div>`).join('');
+  }
+
+  document.getElementById('session-mac-table').innerHTML = macs.length
+    ? macs.map(m => `<tr><td class="mono">${b64toMac(m.MacAddress_bin)}</td><td>${m.VlanId_u32||'–'}</td><td>${fmtDate(m.UpdatedTime_dt)}</td></tr>`).join('')
+    : '<tr><td colspan="3" class="empty">None</td></tr>';
+  document.getElementById('session-ip-table').innerHTML = ips.length
+    ? ips.map(i => `<tr><td class="mono">${i.IpAddress_ip||i.Ip_ip}</td><td>${i.DhcpAllocated_bool?'<span class="badge badge-green">DHCP</span>':'–'}</td><td>${fmtDate(i.UpdatedTime_dt)}</td></tr>`).join('')
+    : '<tr><td colspan="3" class="empty">None</td></tr>';
+}
+
+async function disconnectSessionFromModal() {
+  const name = document.getElementById('session-disconnect-btn').dataset.name;
+  if (!name || !confirm(`Disconnect session "${name}"?`)) return;
+  closeModal('modal-session');
+  _removeSessionRow(name);
+  api('DELETE', `/api/hubs/${enc(currentHub)}/sessions/${enc(name)}`)
+    .finally(() => loadSessionsAll());
+}
+
+function resolveIp(s) {
+  if (s.ClientIP_ip && s.ClientIP_ip !== '::' && s.ClientIP_ip !== '0.0.0.0') return s.ClientIP_ip;
+  if (s.Ip_ip && s.Ip_ip !== '0.0.0.0') return s.Ip_ip;
+  return '–';
+}
+
+async function disconnectSession(name) {
+  if (!confirm(`Disconnect session "${name}"?`)) return;
+  _removeSessionRow(name);
+  api('DELETE', `/api/hubs/${enc(currentHub)}/sessions/${enc(name)}`)
+    .finally(() => loadSessionsAll());
+}
+
+function _removeSessionRow(name) {
+  const tb = document.getElementById('sessions-table');
+  if (!tb) return;
+  [...tb.rows].forEach(r => { if (r.cells[0]?.textContent.trim().startsWith(name)) r.remove(); });
+}
+
+async function openMacTableModal() {
+  await loadMacTable();
+  openModal('modal-mac-table');
+}
+
+async function openIpTableModal() {
+  await loadIpTable();
+  openModal('modal-ip-table');
+}
+
+// ---- MAC Table ----
+async function loadMacTable() {
+  const data = await api('GET', `/api/hubs/${enc(currentHub)}/mac-table`);
+  if (!data) return;
+  _macData = data;
+  const tb = document.getElementById('mac-table');
+  if (!data.length) { tb.innerHTML = `<tr><td colspan="5" class="empty">No MAC entries</td></tr>`; return; }
+  tb.innerHTML = data.map(m => `<tr>
+    <td class="mono">${b64toMac(m.MacAddress_bin)}</td>
+    <td class="mono">${m.SessionName_str}</td>
+    <td>${m.VlanId_u32 || '–'}</td>
+    <td>${fmtDate(m.CreatedTime_dt)}</td>
+    <td>${fmtDate(m.UpdatedTime_dt)}</td>
+  </tr>`).join('');
+}
+
+// ---- IP Table ----
+async function loadIpTable() {
+  const data = await api('GET', `/api/hubs/${enc(currentHub)}/ip-table`);
+  if (!data) return;
+  _ipData = data;
+  const tb = document.getElementById('ip-table');
+  if (!data.length) { tb.innerHTML = `<tr><td colspan="5" class="empty">No IP entries</td></tr>`; return; }
+  tb.innerHTML = data.map(i => `<tr>
+    <td class="mono">${i.IpAddress_ip || i.Ip_ip}</td>
+    <td class="mono">${i.SessionName_str}</td>
+    <td>${i.DhcpAllocated_bool ? '<span class="badge badge-green">DHCP</span>' : '–'}</td>
+    <td>${fmtDate(i.CreatedTime_dt)}</td>
+    <td>${fmtDate(i.UpdatedTime_dt)}</td>
+  </tr>`).join('');
+}
+
+// ---- Links ----
+async function loadLinks() {
+  const data = await api('GET', `/api/hubs/${enc(currentHub)}/links`);
+  if (!data) return;
+  const tb = document.getElementById('links-table');
+  if (!data.length) { tb.innerHTML = `<tr><td colspan="8" class="empty">No cascade links</td></tr>`; return; }
+  tb.innerHTML = data.map(l => {
+    const connected = l.Connected_bool;
+    const online    = l.Online_bool;
+    const statusBadge = connected
+      ? '<span class="badge badge-green">Connected</span>'
+      : online
+        ? '<span class="badge badge-yellow">Connecting…</span>'
+        : '<span class="badge badge-red">Offline</span>';
+    const toggleBtn = online
+      ? `<button class="btn btn-warning btn-sm" onclick="setLinkOffline('${l.AccountName_utf}')">Set Offline</button>`
+      : `<button class="btn btn-primary btn-sm"  onclick="setLinkOnline('${l.AccountName_utf}')">Set Online</button>`;
+    return `<tr>
+      <td><strong>${l.AccountName_utf}</strong></td>
+      <td class="mono">${l.Hostname_str}</td>
+      <td>${l.Port_u32 || '–'}</td>
+      <td>${l.TargetHubName_str || l.ConnectedHubName_str || '–'}</td>
+      <td>${l.Username_str || '–'}</td>
+      <td>${statusBadge}</td>
+      <td>${fmtDate(l.ConnectedTime_dt)}</td>
+      <td style="display:flex;gap:.35rem;flex-wrap:wrap">
+        ${toggleBtn}
+        <button class="btn btn-ghost btn-sm" onclick="openEditLinkModal('${l.AccountName_utf}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteLink('${l.AccountName_utf}')">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+let editingLink = null;
+
+function _linkFormDefaults() {
+  document.getElementById('link-name').value     = '';
+  document.getElementById('link-host').value     = '';
+  document.getElementById('link-port').innerHTML = '';
+  document.getElementById('link-hub').value      = 'DEFAULT';
+  document.getElementById('link-hub-sel').style.display = 'none';
+  document.getElementById('link-hub-sel').innerHTML = '';
+  document.getElementById('link-hub-err').textContent = '';
+  document.getElementById('link-user').value     = '';
+  document.getElementById('link-pw').value       = '';
+  document.getElementById('link-pw2').value      = '';
+  document.getElementById('link-maxconn').value  = '8';
+  document.getElementById('link-retry').value    = '15';
+  document.getElementById('link-online').checked  = false;
+  document.getElementById('link-encrypt').checked = true;
+  document.getElementById('link-compress').checked = false;
+  document.getElementById('link-cert').checked   = false;
+  document.getElementById('link-half').checked   = false;
+  document.getElementById('link-noudp').checked  = false;
+  document.getElementById('link-err').textContent = '';
+}
+
+async function fetchRemoteHubs() {
+  const host = document.getElementById('link-host').value.trim();
+  const port = parseInt(document.getElementById('link-port').value) || 5555;
+  const errEl = document.getElementById('link-hub-err');
+  errEl.textContent = '';
+  if (!host) { errEl.style.color='#e05252'; errEl.textContent = 'Enter hostname first'; return; }
+  const btn = document.getElementById('link-hub-fetch');
+  btn.textContent = '…'; btn.disabled = true;
+  try {
+    const r = await fetch('/api/probe/hubs', {method:'POST', headers:{'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify({hostname: host, port})});
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      errEl.style.color = '#e05252';
+      errEl.textContent = data.detail || 'Could not reach remote server';
+      document.getElementById('link-hub-sel').style.display = 'none';
+    } else {
+      const hubs = data;
+      const sel = document.getElementById('link-hub-sel');
+      if (hubs && hubs.length) {
+        const current = document.getElementById('link-hub').value || '';
+        sel.innerHTML = hubs.map(h => `<option value="${h}"${h===current?' selected':''}>${h}</option>`).join('');
+        sel.style.display = '';
+        if (!current) document.getElementById('link-hub').value = sel.value;
+      } else {
+        sel.style.display = 'none';
+        errEl.style.color = '#e05252';
+        errEl.textContent = 'No hubs found';
+      }
+    }
+  } catch(e) {
+    document.getElementById('link-hub-sel').style.display = 'none';
+    errEl.style.color = '#e05252';
+    errEl.textContent = 'Could not reach remote server';
+  }
+  btn.textContent = 'Fetch list'; btn.disabled = false;
+}
+
+async function populateLinkPortList(selectedPort) {
+  const sel = document.getElementById('link-port');
+  const listeners = await api('GET', '/api/server/listeners');
+  const ports = listeners ? listeners.map(l => l.Ports_u32).sort((a,b) => a-b) : [];
+  if (!ports.includes(5555)) ports.unshift(5555);
+  const want = selectedPort || 5555;
+  sel.innerHTML = ports.map(p => `<option value="${p}"${p==want?' selected':''}>${p}</option>`).join('');
+}
+
+function openNewLinkModal() {
+  editingLink = null;
+  _linkFormDefaults();
+  document.getElementById('link-modal-title').textContent = 'New Cascade Link';
+  document.getElementById('link-submit-btn').textContent  = 'Create';
+  document.getElementById('link-name').disabled = false;
+  populateLinkPortList();
+  openModal('modal-link');
+}
+
+async function openEditLinkModal(name) {
+  editingLink = name;
+  const data = await api('GET', `/api/hubs/${enc(currentHub)}/links/${enc(name)}`);
+  if (!data) return;
+  _linkFormDefaults();
+  await populateLinkPortList(data.Port_u32 || 5555);
+  document.getElementById('link-modal-title').textContent = `Edit Link — ${name}`;
+  document.getElementById('link-submit-btn').textContent  = 'Save';
+  document.getElementById('link-name').value    = data.AccountName_utf || name;
+  document.getElementById('link-name').disabled = true;
+  document.getElementById('link-host').value    = data.Hostname_str || '';
+  document.getElementById('link-hub').value     = data.HubName_str || 'DEFAULT';
+  document.getElementById('link-user').value    = data.Username_str || '';
+  document.getElementById('link-maxconn').value = data.MaxConnection_u32 || 8;
+  document.getElementById('link-retry').value   = data.RetryInterval_u32 || 15;
+  document.getElementById('link-online').checked  = data.Online_bool || false;
+  document.getElementById('link-encrypt').checked = data.UseEncrypt_u32 ? true : false;
+  document.getElementById('link-compress').checked = data.UseCompress_u32 ? true : false;
+  document.getElementById('link-cert').checked   = data.CheckServerCert_bool || false;
+  document.getElementById('link-half').checked   = data.HalfConnection_bool || false;
+  document.getElementById('link-noudp').checked  = data.NoUdpAcceleration_bool || false;
+  openModal('modal-link');
+}
+
+async function submitLink() {
+  const name = editingLink || document.getElementById('link-name').value.trim();
+  const pw   = document.getElementById('link-pw').value;
+  const pw2  = document.getElementById('link-pw2').value;
+  document.getElementById('link-err').textContent = '';
+  if (!name) { document.getElementById('link-err').textContent = 'Link name required'; return; }
+  if (!document.getElementById('link-host').value.trim()) { document.getElementById('link-err').textContent = 'Hostname required'; return; }
+  if (!editingLink && !pw) { document.getElementById('link-err').textContent = 'Password required'; return; }
+  if (pw !== pw2) { document.getElementById('link-err').textContent = 'Passwords do not match'; return; }
+  const body = {
+    name:                name,
+    hostname:            document.getElementById('link-host').value.trim(),
+    port:                parseInt(document.getElementById('link-port').value) || 5555,
+    dest_hub:            document.getElementById('link-hub').value.trim() || 'DEFAULT',
+    username:            document.getElementById('link-user').value.trim(),
+    password:            pw,
+    online:              document.getElementById('link-online').checked,
+    use_encrypt:         document.getElementById('link-encrypt').checked,
+    use_compress:        document.getElementById('link-compress').checked,
+    check_server_cert:   document.getElementById('link-cert').checked,
+    half_connection:     document.getElementById('link-half').checked,
+    no_udp_acceleration: document.getElementById('link-noudp').checked,
+    max_connection:      parseInt(document.getElementById('link-maxconn').value) || 8,
+    retry_interval:      parseInt(document.getElementById('link-retry').value) || 15,
+  };
+  try {
+    if (editingLink) {
+      await api('PUT', `/api/hubs/${enc(currentHub)}/links/${enc(editingLink)}`, body);
+    } else {
+      await api('POST', `/api/hubs/${enc(currentHub)}/links`, body);
+    }
+    closeModal('modal-link');
+    invalidateCache(`/api/hubs/${enc(currentHub)}/links`);
+    loadLinks();
+  } catch(e) { document.getElementById('link-err').textContent = e.message; }
+}
+
+async function deleteLink(name) {
+  if (!confirm(`Delete cascade link "${name}"?`)) return;
+  await api('DELETE', `/api/hubs/${enc(currentHub)}/links/${enc(name)}`);
+  invalidateCache(`/api/hubs/${enc(currentHub)}/links`);
+  loadLinks();
+}
+
+async function setLinkOnline(name) {
+  await api('POST', `/api/hubs/${enc(currentHub)}/links/${enc(name)}/online`);
+  invalidateCache(`/api/hubs/${enc(currentHub)}/links`);
+  loadLinks();
+}
+
+async function setLinkOffline(name) {
+  await api('POST', `/api/hubs/${enc(currentHub)}/links/${enc(name)}/offline`);
+  invalidateCache(`/api/hubs/${enc(currentHub)}/links`);
+  loadLinks();
+}
+
+// ---- NAT / DHCP ----
+let _natEnabled = false;
+
+function _macBinToHex(b64) {
+  if (!b64) return '';
+  // Already in colon-hex format (e.g. from vpncmd path)
+  if (/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(b64)) return b64.toUpperCase();
+  try {
+    const raw = atob(b64);
+    if (raw.length === 6 && raw.split('').every(c => c.charCodeAt(0) === 0)) return '';
+    return Array.from(raw).map(c => c.charCodeAt(0).toString(16).padStart(2,'0').toUpperCase()).join(':');
+  } catch { return b64; }
+}
+
+function _macHexToBin(hex) {
+  if (!hex) return '';
+  const parts = hex.trim().split(/[:\-]/);
+  if (parts.length !== 6) return hex;
+  return btoa(String.fromCharCode(...parts.map(h => parseInt(h, 16))));
+}
+
+async function loadNatDhcp() {
+  const d = await api('GET', `/api/hubs/${enc(currentHub)}/securenat`);
+  if (!d) return;
+  _natEnabled = d._enabled || false;
+  _updateNatBadge();
+  document.getElementById('nat-mac').value            = _macBinToHex(d.MacAddress_bin);
+  document.getElementById('nat-ip').value             = d.Ip_ip   || '192.168.30.1';
+  document.getElementById('nat-mask').value           = d.Mask_ip || '255.255.255.0';
+  document.getElementById('nat-use-nat').checked      = d.UseNat_bool || false;
+  document.getElementById('nat-mtu').value            = d.Mtu_u32 || 1500;
+  document.getElementById('nat-tcp-timeout').value    = d.NatTcpTimeout_u32 || 60;
+  document.getElementById('nat-udp-timeout').value    = d.NatUdpTimeout_u32 || 30;
+  document.getElementById('nat-use-dhcp').checked     = d.UseDhcp_bool || false;
+  document.getElementById('nat-dhcp-start').value     = d.DhcpLeaseIPStart_ip || '192.168.30.10';
+  document.getElementById('nat-dhcp-end').value       = d.DhcpLeaseIPEnd_ip   || '192.168.30.200';
+  document.getElementById('nat-dhcp-mask').value      = d.DhcpSubnetMask_ip   || '255.255.255.0';
+  document.getElementById('nat-dhcp-gw').value        = d.DhcpGatewayAddress_ip     || '192.168.30.1';
+  document.getElementById('nat-dhcp-dns1').value      = d.DhcpDnsServerAddress_ip   || '8.8.8.8';
+  document.getElementById('nat-dhcp-dns2').value      = d.DhcpDnsServerAddress2_ip  || '';
+  document.getElementById('nat-dhcp-domain').value    = d.DhcpDomainName_str || '';
+  document.getElementById('nat-dhcp-lease').value     = d.DhcpExpireTimeSpan_u32 || 7200;
+  document.getElementById('nat-dhcp-routes').value    = d.DhcpPushRoutes_str || '';
+  document.getElementById('nat-save-log').checked     = d.SaveLog_bool || false;
+  document.getElementById('nat-err').textContent = '';
+  if (_natEnabled) loadNatSessions();
+}
+
+function _updateNatBadge() {
+  const badge = document.getElementById('nat-status-badge');
+  const btn   = document.getElementById('nat-toggle-btn');
+  if (_natEnabled) {
+    badge.innerHTML = '<span class="badge badge-green">Running</span>';
+    btn.textContent = 'Disable';
+    btn.className   = 'btn btn-danger btn-sm';
+  } else {
+    badge.innerHTML = '<span class="badge badge-red">Stopped</span>';
+    btn.textContent = 'Enable';
+    btn.className   = 'btn btn-primary btn-sm';
+  }
+}
+
+async function toggleSecureNat() {
+  _natEnabled = !_natEnabled;
+  _updateNatBadge();
+  await saveNatDhcp();
+}
+
+async function saveNatDhcp() {
+  const errEl = document.getElementById('nat-err');
+  errEl.textContent = '';
+  try {
+    await api('PUT', `/api/hubs/${enc(currentHub)}/securenat`, {
+      enabled:     _natEnabled,
+      mac:         _macHexToBin(document.getElementById('nat-mac').value.trim()),
+      ip:          document.getElementById('nat-ip').value.trim(),
+      mask:        document.getElementById('nat-mask').value.trim(),
+      use_nat:     document.getElementById('nat-use-nat').checked,
+      mtu:         parseInt(document.getElementById('nat-mtu').value) || 1500,
+      tcp_timeout: parseInt(document.getElementById('nat-tcp-timeout').value) || 60,
+      udp_timeout: parseInt(document.getElementById('nat-udp-timeout').value) || 30,
+      use_dhcp:    document.getElementById('nat-use-dhcp').checked,
+      dhcp_start:  document.getElementById('nat-dhcp-start').value,
+      dhcp_end:    document.getElementById('nat-dhcp-end').value,
+      dhcp_mask:   document.getElementById('nat-dhcp-mask').value,
+      dhcp_gateway: document.getElementById('nat-dhcp-gw').value,
+      dhcp_dns1:   document.getElementById('nat-dhcp-dns1').value,
+      dhcp_dns2:   document.getElementById('nat-dhcp-dns2').value,
+      dhcp_domain: document.getElementById('nat-dhcp-domain').value,
+      dhcp_lease:  parseInt(document.getElementById('nat-dhcp-lease').value) || 7200,
+      dhcp_push_routes: document.getElementById('nat-dhcp-routes').value,
+      save_log:    document.getElementById('nat-save-log').checked,
+    });
+    invalidateCache(`/api/hubs/${enc(currentHub)}/securenat`);
+    errEl.style.color = '#4caf8a';
+    errEl.textContent = 'Saved';
+    setTimeout(() => { errEl.textContent = ''; }, 2000);
+  } catch(e) {
+    _natEnabled = !_natEnabled;
+    _updateNatBadge();
+    errEl.style.color = '#e05252';
+    errEl.textContent = e.message || 'Error saving';
+  }
+}
+
+async function loadNatSessions() {
+  const d = await api('GET', `/api/hubs/${enc(currentHub)}/securenat/sessions`);
+  if (!d) return;
+  const natTb  = document.getElementById('nat-sessions-table');
+  const dhcpTb = document.getElementById('dhcp-leases-table');
+  natTb.innerHTML = d.nat.length
+    ? d.nat.map(s => `<tr>
+        <td>${s.Protocol_u32 === 6 ? 'TCP' : s.Protocol_u32 === 17 ? 'UDP' : 'ICMP'}</td>
+        <td class="mono">${s.SrcIp_ip||'–'}</td><td>${s.SrcPort_u32||'–'}</td>
+        <td class="mono">${s.DestIp_ip||'–'}</td><td>${s.DestPort_u32||'–'}</td>
+        <td>${fmtBytes(s.SendSize_u64)}</td><td>${fmtBytes(s.RecvSize_u64)}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="7" class="empty">No active NAT sessions</td></tr>';
+  dhcpTb.innerHTML = d.dhcp.length
+    ? d.dhcp.map(l => `<tr>
+        <td class="mono">${l.IpAddress_ip||'–'}</td>
+        <td class="mono">${l.MacAddress_bin||'–'}</td>
+        <td>${l.Hostname_str||'–'}</td>
+        <td>${fmtDate(l.ExpireTime_dt)}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="4" class="empty">No active leases</td></tr>';
+}
+
+// ---- Settings ----
+async function loadSettings() {
+  const [config, log, radius] = await Promise.all([
+    api('GET', `/api/hubs/${enc(currentHub)}/config`),
+    api('GET', `/api/hubs/${enc(currentHub)}/log`),
+    api('GET', `/api/hubs/${enc(currentHub)}/radius`),
+  ]);
+  if (config) {
+    document.getElementById('cfg-max-session').value = config.MaxSession_u32 ?? 0;
+    document.getElementById('cfg-no-enum').checked = config.NoEnum_bool ?? false;
+  }
+  if (log) {
+    document.getElementById('log-security').checked = log.SaveSecurityLog_bool ?? true;
+    document.getElementById('log-packet').checked   = log.SavePacketLog_bool ?? false;
+    document.getElementById('log-switch').value     = log.SecurityLogSwitchType_u32 ?? 4;
+  }
+  if (radius) {
+    document.getElementById('rad-server').value = radius.RadiusServerName_str || '';
+    document.getElementById('rad-port').value   = radius.RadiusPort_u32 || 1812;
+    document.getElementById('rad-secret').value = radius.RadiusSecret_str || '';
+    document.getElementById('rad-retry').value  = radius.RadiusRetryInterval_u32 || 500;
+  }
+}
+
+async function saveHubConfig() {
+  const errEl = document.getElementById('cfg-err');
+  errEl.textContent = '';
+  const pw  = document.getElementById('cfg-hub-pw').value;
+  const pw2 = document.getElementById('cfg-hub-pw2').value;
+  if (pw !== pw2) { errEl.style.color = '#e05252'; errEl.textContent = 'Passwords do not match.'; return; }
+  try {
+    await api('PUT', `/api/hubs/${enc(currentHub)}/config`, {
+      online: true,
+      max_session: parseInt(document.getElementById('cfg-max-session').value) || 0,
+      no_enum: document.getElementById('cfg-no-enum').checked,
+      password: pw,
+    });
+    invalidateCache(`/api/hubs/${enc(currentHub)}/config`, `/api/hubs/${enc(currentHub)}/status`);
+    document.getElementById('cfg-hub-pw').value = '';
+    document.getElementById('cfg-hub-pw2').value = '';
+    errEl.style.color = '#4caf7e';
+    errEl.textContent = 'Saved.';
+    setTimeout(() => errEl.textContent = '', 2000);
+  } catch(e) { errEl.style.color = '#e05252'; errEl.textContent = e.message; }
+}
+
+async function saveLogConfig() {
+  document.getElementById('log-err').textContent = '';
+  try {
+    await api('PUT', `/api/hubs/${enc(currentHub)}/log`, {
+      save_security_log: document.getElementById('log-security').checked,
+      security_log_switch_type: parseInt(document.getElementById('log-switch').value),
+      save_packet_log: document.getElementById('log-packet').checked,
+      packet_log_switch_type: parseInt(document.getElementById('log-switch').value),
+    });
+    invalidateCache(`/api/hubs/${enc(currentHub)}/log`);
+    document.getElementById('log-err').style.color = '#4caf7e';
+    document.getElementById('log-err').textContent = 'Saved.';
+    setTimeout(() => document.getElementById('log-err').textContent = '', 2000);
+  } catch(e) { document.getElementById('log-err').style.color = '#e05252'; document.getElementById('log-err').textContent = e.message; }
+}
+
+async function saveRadiusConfig() {
+  document.getElementById('rad-err').textContent = '';
+  try {
+    await api('PUT', `/api/hubs/${enc(currentHub)}/radius`, {
+      server: document.getElementById('rad-server').value.trim(),
+      port:   parseInt(document.getElementById('rad-port').value) || 1812,
+      secret: document.getElementById('rad-secret').value,
+      retry_interval: parseInt(document.getElementById('rad-retry').value) || 500,
+    });
+    invalidateCache(`/api/hubs/${enc(currentHub)}/radius`);
+    document.getElementById('rad-err').style.color = '#4caf7e';
+    document.getElementById('rad-err').textContent = 'Saved.';
+    setTimeout(() => document.getElementById('rad-err').textContent = '', 2000);
+  } catch(e) { document.getElementById('rad-err').style.color = '#e05252'; document.getElementById('rad-err').textContent = e.message; }
+}
+
+async function toggleHubOnline() {
+  invalidateCache(`/api/hubs/${enc(currentHub)}/status`);
+  const status = await api('GET', `/api/hubs/${enc(currentHub)}/status`);
+  if (!status) return;
+  await api('PUT', `/api/hubs/${enc(currentHub)}/config`, {
+    online: !status.Online_bool,
+    max_session: 0,
+    no_enum: false,
+  });
+  invalidateCache(`/api/hubs/${enc(currentHub)}/status`, `/api/hubs/${enc(currentHub)}/config`);
+  loadHubOverview();
+}
+
+// ---- Hub CRUD ----
+async function createHub() {
+  const name = document.getElementById('hub-name').value.trim();
+  const pw   = document.getElementById('hub-pw').value;
+  document.getElementById('hub-err').textContent = '';
+  if (!name) { document.getElementById('hub-err').textContent = 'Name required'; return; }
+  try {
+    await api('POST', '/api/hubs', {name, password: pw});
+    closeModal('modal-hub');
+    document.getElementById('hub-name').value = '';
+    document.getElementById('hub-pw').value = '';
+    invalidateCache('/api/hubs', '/api/server/status');
+    loadHubNav();
+  } catch(e) { document.getElementById('hub-err').textContent = e.message; }
+}
+
+async function deleteCurrentHub() {
+  if (!confirm(`Delete hub "${currentHub}"? This cannot be undone.`)) return;
+  await api('DELETE', `/api/hubs/${enc(currentHub)}`);
+  invalidateCache('/api/hubs', '/api/server/status');
+  showView('dashboard', document.querySelector('[data-view="dashboard"]'));
+  loadHubNav();
+  loadDashboard();
+}
+
+// ---- Layer 3 Switch ----
+let currentL3 = null;
+let currentL3Tab = 'interfaces';
+
+function switchL3Tab(el) {
+  document.querySelectorAll('[data-l3tab]').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  currentL3Tab = el.dataset.l3tab;
+  document.getElementById('l3tab-interfaces').style.display = currentL3Tab === 'interfaces' ? '' : 'none';
+  document.getElementById('l3tab-routes').style.display      = currentL3Tab === 'routes'     ? '' : 'none';
+  if (currentL3Tab === 'interfaces') loadL3Interfaces();
+  if (currentL3Tab === 'routes')     loadL3Routes();
+}
+
+async function loadL3List() {
+  const tb = document.getElementById('l3-list');
+  const data = await api('GET', '/api/l3');
+  if (!data) return;
+  if (!data.length) {
+    tb.innerHTML = `<tr><td colspan="5" class="empty">No L3 switches — create one to enable inter-hub routing</td></tr>`;
+    document.getElementById('l3-detail').style.display = 'none';
+    return;
+  }
+  tb.innerHTML = data.map(sw => {
+    const active = sw.Active_bool;
+    const online = sw.Online_bool;
+    const statusBadge = active && online
+      ? '<span class="badge badge-green">Running</span>'
+      : active
+        ? '<span class="badge badge-yellow">Starting…</span>'
+        : '<span class="badge badge-red">Stopped</span>';
+    const toggleBtn = (active || online)
+      ? `<button class="btn btn-warning btn-sm" onclick="stopL3('${sw.Name_str}')">Stop</button>`
+      : `<button class="btn btn-primary btn-sm"  onclick="startL3('${sw.Name_str}')">Start</button>`;
+    const selectedStyle = currentL3 === sw.Name_str ? 'background:#1e2540' : '';
+    return `<tr style="cursor:pointer;${selectedStyle}" onclick="selectL3('${sw.Name_str}')">
+      <td><strong>${sw.Name_str}</strong></td>
+      <td>${statusBadge}</td>
+      <td>${fmt(sw.NumInterfaces_u32)}</td>
+      <td>${fmt(sw.NumTables_u32)}</td>
+      <td style="display:flex;gap:.35rem">
+        ${toggleBtn}
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();selectL3('${sw.Name_str}')">Configure</button>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteL3('${sw.Name_str}')">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function selectL3(name) {
+  currentL3 = name;
+  currentL3Tab = 'interfaces';
+  document.getElementById('l3-detail').style.display = '';
+  document.getElementById('l3-detail-title').textContent = 'Configure: ' + name;
+  document.querySelectorAll('[data-l3tab]').forEach(t => t.classList.toggle('active', t.dataset.l3tab === 'interfaces'));
+  document.getElementById('l3tab-interfaces').style.display = '';
+  document.getElementById('l3tab-routes').style.display = 'none';
+  loadL3Interfaces();
+  loadL3List();
+}
+
+async function createL3Switch() {
+  const name = document.getElementById('l3-new-name').value.trim();
+  document.getElementById('l3-new-err').textContent = '';
+  if (!name) { document.getElementById('l3-new-err').textContent = 'Name required'; return; }
+  try {
+    await api('POST', '/api/l3', {name});
+    closeModal('modal-l3-new');
+    document.getElementById('l3-new-name').value = '';
+    invalidateCache('/api/l3');
+    loadL3List();
+  } catch(e) { document.getElementById('l3-new-err').textContent = e.message; }
+}
+
+async function deleteL3(name) {
+  if (!confirm(`Delete L3 switch "${name}"?`)) return;
+  await api('DELETE', `/api/l3/${enc(name)}`);
+  if (currentL3 === name) {
+    currentL3 = null;
+    document.getElementById('l3-detail').style.display = 'none';
+  }
+  invalidateCache('/api/l3');
+  loadL3List();
+}
+
+async function startL3(name) {
+  await api('POST', `/api/l3/${enc(name)}/start`);
+  invalidateCache('/api/l3');
+  loadL3List();
+}
+
+async function stopL3(name) {
+  await api('POST', `/api/l3/${enc(name)}/stop`);
+  invalidateCache('/api/l3');
+  loadL3List();
+}
+
+// Interfaces
+async function loadL3Interfaces() {
+  const tb = document.getElementById('l3-if-table');
+  const data = await api('GET', `/api/l3/${enc(currentL3)}/interfaces`);
+  if (!data) return;
+  if (!data.length) { tb.innerHTML = `<tr><td colspan="4" class="empty">No interfaces — add one per hub to route between</td></tr>`; return; }
+  tb.innerHTML = data.map(i => `<tr>
+    <td><span class="badge badge-blue">${i.HubName_str}</span></td>
+    <td class="mono">${i.IpAddress_ip}</td>
+    <td class="mono">${i.SubnetMask_ip}</td>
+    <td><button class="btn btn-danger btn-sm" onclick="deleteL3Interface('${i.HubName_str}','${i.IpAddress_ip}','${i.SubnetMask_ip}')">Delete</button></td>
+  </tr>`).join('');
+}
+
+async function openAddIfModal() {
+  document.getElementById('l3-if-err').textContent = '';
+  document.getElementById('l3-if-ip').value = '';
+  document.getElementById('l3-if-mask').value = '255.255.255.0';
+  const hubs = await api('GET', '/api/hubs');
+  document.getElementById('l3-if-hub').innerHTML = (hubs || [])
+    .map(h => `<option value="${h.HubName_str}">${h.HubName_str}</option>`).join('');
+  openModal('modal-l3-if');
+}
+
+async function addL3Interface() {
+  document.getElementById('l3-if-err').textContent = '';
+  const hub  = document.getElementById('l3-if-hub').value;
+  const ip   = document.getElementById('l3-if-ip').value.trim();
+  const mask = document.getElementById('l3-if-mask').value.trim();
+  if (!ip || !mask) { document.getElementById('l3-if-err').textContent = 'IP and mask required'; return; }
+  try {
+    await api('POST', `/api/l3/${enc(currentL3)}/interfaces`, {hub, ip, mask});
+    closeModal('modal-l3-if');
+    invalidateCache(`/api/l3/${enc(currentL3)}/interfaces`, '/api/l3');
+    loadL3Interfaces();
+    loadL3List();
+  } catch(e) { document.getElementById('l3-if-err').textContent = e.message; }
+}
+
+async function deleteL3Interface(hub, ip, mask) {
+  if (!confirm(`Delete interface on hub "${hub}" (${ip})?`)) return;
+  await api('DELETE', `/api/l3/${enc(currentL3)}/interfaces/${enc(hub)}?ip=${enc(ip)}&mask=${enc(mask)}`);
+  invalidateCache(`/api/l3/${enc(currentL3)}/interfaces`, '/api/l3');
+  loadL3Interfaces();
+  loadL3List();
+}
+
+// Routes
+async function loadL3Routes() {
+  const tb = document.getElementById('l3-route-table');
+  const data = await api('GET', `/api/l3/${enc(currentL3)}/routes`);
+  if (!data) return;
+  if (!data.length) { tb.innerHTML = `<tr><td colspan="5" class="empty">No static routes</td></tr>`; return; }
+  tb.innerHTML = data.map(r => `<tr>
+    <td class="mono">${r.NetworkAddress_ip}</td>
+    <td class="mono">${r.SubnetMask_ip}</td>
+    <td class="mono">${r.GatewayAddress_ip}</td>
+    <td>${r.Metric_u32}</td>
+    <td><button class="btn btn-danger btn-sm" onclick="deleteL3Route('${r.NetworkAddress_ip}','${r.SubnetMask_ip}','${r.GatewayAddress_ip}',${r.Metric_u32})">Delete</button></td>
+  </tr>`).join('');
+}
+
+function openAddRouteModal() {
+  document.getElementById('l3-rt-err').textContent = '';
+  ['l3-rt-net','l3-rt-mask','l3-rt-gw'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('l3-rt-mask').value = '255.255.255.0';
+  document.getElementById('l3-rt-metric').value = '1';
+  openModal('modal-l3-route');
+}
+
+async function addL3Route() {
+  document.getElementById('l3-rt-err').textContent = '';
+  const network = document.getElementById('l3-rt-net').value.trim();
+  const mask    = document.getElementById('l3-rt-mask').value.trim();
+  const gateway = document.getElementById('l3-rt-gw').value.trim();
+  const metric  = parseInt(document.getElementById('l3-rt-metric').value) || 1;
+  if (!network || !mask || !gateway) { document.getElementById('l3-rt-err').textContent = 'All fields required'; return; }
+  try {
+    await api('POST', `/api/l3/${enc(currentL3)}/routes`, {network, mask, gateway, metric});
+    closeModal('modal-l3-route');
+    invalidateCache(`/api/l3/${enc(currentL3)}/routes`, '/api/l3');
+    loadL3Routes();
+    loadL3List();
+  } catch(e) { document.getElementById('l3-rt-err').textContent = e.message; }
+}
+
+async function deleteL3Route(network, mask, gateway, metric) {
+  if (!confirm(`Delete route ${network}/${mask} via ${gateway}?`)) return;
+  await api('DELETE', `/api/l3/${enc(currentL3)}/routes?network=${enc(network)}&mask=${enc(mask)}&gateway=${enc(gateway)}&metric=${metric}`);
+  invalidateCache(`/api/l3/${enc(currentL3)}/routes`, '/api/l3');
+  loadL3Routes();
+  loadL3List();
+}
+
+// ---- Server Settings ----
+function switchSTab(el) {
+  document.querySelectorAll('[data-stab]').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const tab = el.dataset.stab;
+  currentSTab = tab;
+  location.hash = 'server/' + tab;
+  document.querySelectorAll('.stab-pane').forEach(p => p.style.display = 'none');
+  document.getElementById('stab-' + tab).style.display = '';
+  if (tab === 'bridges')   loadBridges();
+  if (tab === 'listeners') loadListeners();
+  if (tab === 'protocols') { loadIpsec(); loadOpenVpn(); }
+  if (tab === 'syslog')    loadSyslog();
+  if (tab === 'security')  loadSecurity();
+  if (tab === 'l3')        { currentL3 = null; document.getElementById('l3-detail').style.display = 'none'; loadL3List(); }
+}
+
+// Local Bridges
+async function loadBridges() {
+  const tb = document.getElementById('bridges-table');
+  const data = await api('GET', '/api/server/bridges');
+  if (!data) return;
+  if (!data.length) { tb.innerHTML = `<tr><td colspan="6" class="empty">No local bridges</td></tr>`; return; }
+  tb.innerHTML = data.map(b => `<tr>
+    <td><strong>${b.HubNameLB_str}</strong></td>
+    <td class="mono">${b.DeviceName_str}</td>
+    <td>${b.TapMode_bool ? '<span class="badge badge-blue">TAP</span>' : '<span class="badge badge-yellow">Ethernet</span>'}</td>
+    <td>${b.Active_bool ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-red">Inactive</span>'}</td>
+    <td>${b.Online_bool ? '<span class="badge badge-green">Online</span>' : '<span class="badge badge-red">Offline</span>'}</td>
+    <td><button class="btn btn-danger btn-sm" onclick="deleteBridge('${b.HubNameLB_str}','${b.DeviceName_str}')">Delete</button></td>
+  </tr>`).join('');
+}
+
+async function openBridgeModal() {
+  document.getElementById('bridge-err').textContent = '';
+  document.getElementById('bridge-tap').checked = false;
+  document.getElementById('bridge-tap-name').value = '';
+  document.getElementById('bridge-tap-name-row').style.display = 'none';
+  const [hubs, nics] = await Promise.all([
+    api('GET', '/api/hubs'),
+    api('GET', '/api/server/ethernet'),
+  ]);
+  const hubSel = document.getElementById('bridge-hub');
+  hubSel.innerHTML = (hubs || []).map(h => `<option value="${h.HubName_str}">${h.HubName_str}</option>`).join('');
+  const nicSel = document.getElementById('bridge-nic');
+  nicSel.innerHTML = (nics || []).map(n => `<option value="${n.DeviceName_str}">${n.DeviceName_str}</option>`).join('');
+  openModal('modal-bridge');
+}
+
+function toggleBridgeTap() {
+  const tap = document.getElementById('bridge-tap').checked;
+  document.getElementById('bridge-tap-name-row').style.display = tap ? '' : 'none';
+  const nicSel = document.getElementById('bridge-nic');
+  nicSel.style.display = tap ? 'none' : '';
+  nicSel.previousElementSibling.style.display = tap ? 'none' : '';
+}
+
+async function createBridge() {
+  document.getElementById('bridge-err').textContent = '';
+  const hub = document.getElementById('bridge-hub').value;
+  const tap = document.getElementById('bridge-tap').checked;
+  const device = tap
+    ? (document.getElementById('bridge-tap-name').value.trim() || 'tap_vpn')
+    : document.getElementById('bridge-nic').value;
+  if (!hub) { document.getElementById('bridge-err').textContent = 'Select a hub'; return; }
+  if (!device) { document.getElementById('bridge-err').textContent = 'Device required'; return; }
+  try {
+    await api('POST', '/api/server/bridges', {hub, device, tap});
+    closeModal('modal-bridge');
+    invalidateCache('/api/server/bridges');
+    loadBridges();
+  } catch(e) { document.getElementById('bridge-err').textContent = e.message; }
+}
+
+async function deleteBridge(hub, device) {
+  if (!confirm(`Delete bridge: hub "${hub}" ↔ "${device}"?`)) return;
+  await api('DELETE', `/api/server/bridges/${enc(hub)}/${enc(device)}`);
+  invalidateCache('/api/server/bridges');
+  loadBridges();
+}
+
+// Listeners
+async function loadListeners() {
+  const tb = document.getElementById('listeners-table');
+  const data = await api('GET', '/api/server/listeners');
+  if (!data) return;
+  if (!data.length) { tb.innerHTML = `<tr><td colspan="4" class="empty">No listeners</td></tr>`; return; }
+  tb.innerHTML = data.map(l => {
+    const enabled = l.Enables_bool;
+    return `<tr>
+      <td class="mono"><strong>${l.Ports_u32}</strong></td>
+      <td>${enabled ? '<span class="badge badge-green">Enabled</span>' : '<span class="badge badge-red">Disabled</span>'}</td>
+      <td style="color:#e05252;font-size:.8rem">${l.Errors_bool ? 'Error' : ''}</td>
+      <td style="display:flex;gap:.35rem">
+        ${enabled
+          ? `<button class="btn btn-warning btn-sm" onclick="disableListener(${l.Ports_u32})">Disable</button>`
+          : `<button class="btn btn-primary btn-sm"  onclick="enableListener(${l.Ports_u32})">Enable</button>`}
+        <button class="btn btn-danger btn-sm" onclick="deleteListener(${l.Ports_u32})">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function createListener() {
+  document.getElementById('listener-err').textContent = '';
+  const port = parseInt(document.getElementById('listener-port').value);
+  if (!port || port < 1 || port > 65535) { document.getElementById('listener-err').textContent = 'Invalid port'; return; }
+  try {
+    await api('POST', '/api/server/listeners', {port});
+    closeModal('modal-listener');
+    invalidateCache('/api/server/listeners');
+    loadListeners();
+  } catch(e) { document.getElementById('listener-err').textContent = e.message; }
+}
+
+async function enableListener(port) {
+  await api('PUT', `/api/server/listeners/${port}/enable`);
+  invalidateCache('/api/server/listeners');
+  loadListeners();
+}
+async function disableListener(port) {
+  await api('PUT', `/api/server/listeners/${port}/disable`);
+  invalidateCache('/api/server/listeners');
+  loadListeners();
+}
+async function deleteListener(port) {
+  if (!confirm(`Delete listener on port ${port}?`)) return;
+  await api('DELETE', `/api/server/listeners/${port}`);
+  invalidateCache('/api/server/listeners');
+  loadListeners();
+}
+
+// IPsec
+async function loadIpsec() {
+  const [data, hubs] = await Promise.all([
+    api('GET', '/api/server/ipsec'),
+    api('GET', '/api/hubs'),
+  ]);
+  if (data) {
+    document.getElementById('ipsec-l2tp-raw').checked   = data.L2TP_Raw_bool || false;
+    document.getElementById('ipsec-l2tp-ipsec').checked = data.L2TP_IPsec_bool || false;
+    document.getElementById('ipsec-etherip').checked    = data.EtherIP_IPsec_bool || false;
+    document.getElementById('ipsec-secret').value       = data.IPsec_Secret_str || '';
+    const hubSel = document.getElementById('ipsec-hub');
+    hubSel.innerHTML = '<option value="">— None —</option>' +
+      (hubs || []).map(h => `<option value="${h.HubName_str}"${h.HubName_str === data.L2TP_DefaultHub_str ? ' selected' : ''}>${h.HubName_str}</option>`).join('');
+  }
+}
+
+async function saveIpsec() {
+  document.getElementById('ipsec-err').textContent = '';
+  try {
+    await api('PUT', '/api/server/ipsec', {
+      l2tp_raw:     document.getElementById('ipsec-l2tp-raw').checked,
+      l2tp_ipsec:   document.getElementById('ipsec-l2tp-ipsec').checked,
+      etherip_ipsec: document.getElementById('ipsec-etherip').checked,
+      secret:       document.getElementById('ipsec-secret').value,
+      default_hub:  document.getElementById('ipsec-hub').value,
+    });
+    invalidateCache('/api/server/ipsec');
+    document.getElementById('ipsec-err').style.color = '#4caf7e';
+    document.getElementById('ipsec-err').textContent = 'Saved.';
+    setTimeout(() => document.getElementById('ipsec-err').textContent = '', 2000);
+  } catch(e) {
+    document.getElementById('ipsec-err').style.color = '#e05252';
+    document.getElementById('ipsec-err').textContent = e.message;
+  }
+}
+
+// OpenVPN / SSTP
+async function loadOpenVpn() {
+  const data = await api('GET', '/api/server/openvpn');
+  if (!data) return;
+  document.getElementById('ovpn-enable').checked = data.EnableOpenVPN_bool || false;
+  document.getElementById('ovpn-ports').value    = data.OpenVPNPortList_str || '1194';
+  document.getElementById('sstp-enable').checked = data.EnableSSTP_bool || false;
+}
+
+async function downloadOvpnSample() {
+  const a = document.createElement('a');
+  a.href = '/api/server/openvpn/sample';
+  a.download = 'openvpn_sample.zip';
+  a.click();
+}
+
+async function saveOpenVpn() {
+  document.getElementById('ovpn-err').textContent = '';
+  try {
+    await api('PUT', '/api/server/openvpn', {
+      enable_openvpn:   document.getElementById('ovpn-enable').checked,
+      openvpn_port_list: document.getElementById('ovpn-ports').value.trim() || '1194',
+      enable_sstp:      document.getElementById('sstp-enable').checked,
+    });
+    invalidateCache('/api/server/openvpn');
+    document.getElementById('ovpn-err').style.color = '#4caf7e';
+    document.getElementById('ovpn-err').textContent = 'Saved.';
+    setTimeout(() => document.getElementById('ovpn-err').textContent = '', 2000);
+  } catch(e) {
+    document.getElementById('ovpn-err').style.color = '#e05252';
+    document.getElementById('ovpn-err').textContent = e.message;
+  }
+}
+
+// Syslog
+async function loadSyslog() {
+  const data = await api('GET', '/api/server/syslog');
+  if (!data) return;
+  document.getElementById('syslog-type').value = data.SaveType_u32 ?? 0;
+  document.getElementById('syslog-host').value = data.Hostname_str || '';
+  document.getElementById('syslog-port').value = data.Port_u32 || 514;
+}
+
+async function saveSyslog() {
+  document.getElementById('syslog-err').textContent = '';
+  try {
+    await api('PUT', '/api/server/syslog', {
+      save_type: parseInt(document.getElementById('syslog-type').value),
+      hostname:  document.getElementById('syslog-host').value.trim(),
+      port:      parseInt(document.getElementById('syslog-port').value) || 514,
+    });
+    invalidateCache('/api/server/syslog');
+    document.getElementById('syslog-err').style.color = '#4caf7e';
+    document.getElementById('syslog-err').textContent = 'Saved.';
+    setTimeout(() => document.getElementById('syslog-err').textContent = '', 2000);
+  } catch(e) {
+    document.getElementById('syslog-err').style.color = '#e05252';
+    document.getElementById('syslog-err').textContent = e.message;
+  }
+}
+
+// Server password
+async function changeServerPassword() {
+  document.getElementById('srv-pw-err').textContent = '';
+  document.getElementById('srv-pw-err').style.color = '#e05252';
+  const pw1 = document.getElementById('srv-pw1').value;
+  const pw2 = document.getElementById('srv-pw2').value;
+  if (!pw1) { document.getElementById('srv-pw-err').textContent = 'Password required'; return; }
+  if (pw1 !== pw2) { document.getElementById('srv-pw-err').textContent = 'Passwords do not match'; return; }
+  try {
+    await api('PUT', '/api/server/password', {password: pw1});
+    document.getElementById('srv-pw1').value = '';
+    document.getElementById('srv-pw2').value = '';
+    document.getElementById('srv-pw-err').style.color = '#4caf7e';
+    document.getElementById('srv-pw-err').textContent = 'Password changed. You will need to log in again.';
+  } catch(e) {
+    document.getElementById('srv-pw-err').style.color = '#e05252';
+    document.getElementById('srv-pw-err').textContent = e.message;
+  }
+}
+
+// ---- ACL ----
+async function loadAcl() {
+  const tb = document.getElementById('acl-table');
+  const data = await api('GET', `/api/hubs/${enc(currentHub)}/acl`);
+  if (!data) return;
+  if (!data.length) { tb.innerHTML = `<tr><td colspan="10" class="empty">No access rules — all traffic is permitted</td></tr>`; return; }
+  const protoName = p => ({0:'All',1:'ICMP',6:'TCP',17:'UDP'}[p] ?? p);
+  tb.innerHTML = data.map(r => `<tr>
+    <td>${r.Id_u32 ?? '–'}</td>
+    <td>${r.Note_utf || '–'}</td>
+    <td>${r.Discard_bool ? '<span class="badge badge-red">Discard</span>' : '<span class="badge badge-green">Pass</span>'}</td>
+    <td>${protoName(r.Protocol_u32)}</td>
+    <td class="mono">${r.SrcIpAddress_ip || '0.0.0.0'} / ${r.SrcSubnetMask_ip || '0.0.0.0'}</td>
+    <td class="mono">${r.DestIpAddress_ip || '0.0.0.0'} / ${r.DestSubnetMask_ip || '0.0.0.0'}</td>
+    <td class="mono">${r.SrcPortStart_u32}–${r.SrcPortEnd_u32}</td>
+    <td class="mono">${r.DestPortStart_u32}–${r.DestPortEnd_u32}</td>
+    <td>${r.Active_bool ? '<span class="badge badge-green">Yes</span>' : '<span class="badge badge-yellow">No</span>'}</td>
+    <td><button class="btn btn-danger btn-sm" onclick="deleteAclRule(${r.Id_u32})">Delete</button></td>
+  </tr>`).join('');
+}
+
+function openAddAclModal() {
+  document.getElementById('acl-err').textContent = '';
+  document.getElementById('acl-note').value = '';
+  document.getElementById('acl-priority').value = '100';
+  document.getElementById('acl-action').value = 'pass';
+  document.getElementById('acl-proto').value = '0';
+  document.getElementById('acl-active').checked = true;
+  ['acl-src-ip','acl-dst-ip'].forEach(id => document.getElementById(id).value = '0.0.0.0');
+  ['acl-src-mask','acl-dst-mask'].forEach(id => document.getElementById(id).value = '0.0.0.0');
+  document.getElementById('acl-src-port0').value = '0';
+  document.getElementById('acl-src-port1').value = '65535';
+  document.getElementById('acl-dst-port0').value = '0';
+  document.getElementById('acl-dst-port1').value = '65535';
+  openModal('modal-acl');
+}
+
+async function addAclRule() {
+  document.getElementById('acl-err').textContent = '';
+  try {
+    await api('POST', `/api/hubs/${enc(currentHub)}/acl`, {
+      note:           document.getElementById('acl-note').value.trim() || 'rule',
+      active:         document.getElementById('acl-active').checked,
+      priority:       parseInt(document.getElementById('acl-priority').value) || 100,
+      discard:        document.getElementById('acl-action').value === 'discard',
+      src_ip:         document.getElementById('acl-src-ip').value.trim() || '0.0.0.0',
+      src_mask:       document.getElementById('acl-src-mask').value.trim() || '0.0.0.0',
+      dst_ip:         document.getElementById('acl-dst-ip').value.trim() || '0.0.0.0',
+      dst_mask:       document.getElementById('acl-dst-mask').value.trim() || '0.0.0.0',
+      protocol:       parseInt(document.getElementById('acl-proto').value),
+      src_port_start: parseInt(document.getElementById('acl-src-port0').value) || 0,
+      src_port_end:   parseInt(document.getElementById('acl-src-port1').value) || 65535,
+      dst_port_start: parseInt(document.getElementById('acl-dst-port0').value) || 0,
+      dst_port_end:   parseInt(document.getElementById('acl-dst-port1').value) || 65535,
+    });
+    closeModal('modal-acl');
+    invalidateCache(`/api/hubs/${enc(currentHub)}/acl`);
+    loadAcl();
+  } catch(e) { document.getElementById('acl-err').textContent = e.message; }
+}
+
+async function deleteAclRule(id) {
+  if (!confirm(`Delete access rule #${id}?`)) return;
+  await api('DELETE', `/api/hubs/${enc(currentHub)}/acl/${id}`);
+  invalidateCache(`/api/hubs/${enc(currentHub)}/acl`);
+  loadAcl();
+}
+
+// ---- Security (VPN Azure + Keep-Alive) ----
+async function loadSecurity() {
+  const [azure, ka] = await Promise.all([
+    api('GET', '/api/server/ddns'),
+    api('GET', '/api/server/keepalive').catch(() => null),
+  ]);
+  if (azure) {
+    document.getElementById('azure-enable').checked = azure.AzureEnabled_bool || false;
+    const badge = document.getElementById('azure-status-badge');
+    if (azure.AzureEnabled_bool) {
+      const connected = azure.AzureConnected_bool;
+      badge.style.display = 'inline-block';
+      badge.className = 'badge ' + (connected ? 'badge-green' : 'badge-yellow');
+      badge.textContent = connected ? 'Connected' : 'Not connected';
+    } else {
+      badge.style.display = 'none';
+    }
+    const host = azure.AzureHostname_str || '';
+    const hostRow = document.getElementById('azure-hostname-row');
+    if (host) {
+      document.getElementById('azure-hostname').textContent = host;
+      hostRow.style.display = 'block';
+    } else {
+      hostRow.style.display = 'none';
+    }
+  }
+  if (ka) {
+    document.getElementById('ka-enable').checked   = ka.UseKeepConnect_bool || false;
+    document.getElementById('ka-host').value        = ka.KeepConnectHost_str || 'www.google.com';
+    document.getElementById('ka-port').value        = ka.KeepConnectPort_u32 || 80;
+    document.getElementById('ka-proto').value       = ka.KeepConnectProtocol_u32 || 0;
+    document.getElementById('ka-interval').value    = ka.KeepConnectInterval_u32 || 50;
+  }
+}
+
+async function saveAzure() {
+  const errEl = document.getElementById('azure-err');
+  errEl.textContent = '';
+  try {
+    await api('PUT', '/api/server/azure', {enabled: document.getElementById('azure-enable').checked});
+    invalidateCache('/api/server/ddns');
+    errEl.style.color = '#4caf7e';
+    errEl.textContent = 'Saved.';
+    setTimeout(() => errEl.textContent = '', 2000);
+  } catch(e) { errEl.style.color = '#e05252'; errEl.textContent = e.message; }
+}
+
+async function saveKeepAlive() {
+  const errEl = document.getElementById('ka-err');
+  errEl.textContent = '';
+  try {
+    await api('PUT', '/api/server/keepalive', {
+      enabled:  document.getElementById('ka-enable').checked,
+      host:     document.getElementById('ka-host').value.trim() || 'www.google.com',
+      port:     parseInt(document.getElementById('ka-port').value) || 80,
+      protocol: parseInt(document.getElementById('ka-proto').value),
+      interval: parseInt(document.getElementById('ka-interval').value) || 50,
+    });
+    invalidateCache('/api/server/keepalive');
+    errEl.style.color = '#4caf7e';
+    errEl.textContent = 'Saved.';
+    setTimeout(() => errEl.textContent = '', 2000);
+  } catch(e) { errEl.style.color = '#e05252'; errEl.textContent = e.message; }
+}
+
+// ---- Helpers ----
+const enc = encodeURIComponent;
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m =>
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); })
+);
+</script>
+</body>
+</html>
