@@ -59,6 +59,16 @@ Section "Install" SEC_MAIN
     DetailPrint "Python found: $PythonExe"
   ${EndIf}
 
+  ; --- Verify Python works ---
+  nsExec::ExecToStack '"$PythonExe" --version'
+  Pop $0
+  Pop $1
+  ${If} $0 != 0
+    MessageBox MB_ICONSTOP "Python not responding at:$\r$\n$PythonExe$\r$\n$\r$\nPlease install Python 3.x from python.org and re-run this installer."
+    Abort
+  ${EndIf}
+  DetailPrint "Python OK: $1 ($PythonExe)"
+
   ; --- Install Python packages ---
   DetailPrint "Ensuring pip is available…"
   nsExec::ExecToLog '"$PythonExe" -m ensurepip --upgrade'
@@ -69,15 +79,17 @@ Section "Install" SEC_MAIN
   Pop $0
 
   DetailPrint "Installing required Python packages…"
-  nsExec::ExecToLog '"$PythonExe" -m pip install --quiet --prefer-binary flask yubikey-manager requests cryptography'
+  nsExec::ExecToStack '"$PythonExe" -m pip install --prefer-binary flask yubikey-manager requests cryptography'
   Pop $0
+  Pop $1
   ${If} $0 != 0
     ; Retry with --trusted-host to work around SSL/proxy issues
     DetailPrint "Retrying with relaxed SSL settings…"
-    nsExec::ExecToLog '"$PythonExe" -m pip install --quiet --prefer-binary --trusted-host pypi.org --trusted-host files.pythonhosted.org flask yubikey-manager requests cryptography'
+    nsExec::ExecToStack '"$PythonExe" -m pip install --prefer-binary --trusted-host pypi.org --trusted-host files.pythonhosted.org flask yubikey-manager requests cryptography'
     Pop $0
+    Pop $1
     ${If} $0 != 0
-      MessageBox MB_ICONSTOP "Failed to install Python packages.$\r$\n$\r$\nYou can finish setup manually — open a Command Prompt and run:$\r$\n  python -m pip install flask yubikey-manager requests cryptography$\r$\n$\r$\nThen re-open your registration link."
+      MessageBox MB_ICONSTOP "Failed to install Python packages (exit $0).$\r$\nPython: $PythonExe$\r$\n$\r$\nError output:$\r$\n$1$\r$\n$\r$\nTo finish manually, open Command Prompt and run:$\r$\n  $\"$PythonExe$\" -m pip install flask yubikey-manager requests cryptography$\r$\n$\r$\nThen re-open your registration link."
       ; Non-fatal: rest of installer still runs so vpnreg: URI is registered
     ${EndIf}
   ${EndIf}
