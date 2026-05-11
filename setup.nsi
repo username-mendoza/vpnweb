@@ -33,6 +33,7 @@ Page instfiles
 ; ---- Helpers ----
 !include "LogicLib.nsh"
 !include "WinVer.nsh"
+!include "FileFunc.nsh"
 
 Var /GLOBAL PythonExe
 Var /GLOBAL PythonwExe
@@ -129,10 +130,10 @@ Function FindPython
   Pop $0
   Pop $1
   ${If} $0 == 0
-    ; Use first line
     StrCpy $PythonExe $1
-    ; pythonw: same dir, different exe
-    ${StrRep} $PythonwExe $PythonExe "python.exe" "pythonw.exe"
+    ; pythonw.exe lives in the same directory as python.exe
+    ${GetParent} $PythonExe $R0
+    StrCpy $PythonwExe "$R0\pythonw.exe"
     Return
   ${EndIf}
 
