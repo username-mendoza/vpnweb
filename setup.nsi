@@ -188,15 +188,8 @@ Function FindPython
     Return
   ${EndIf}
 
-  ; 4. Last resort: PATH lookup (strips trailing \r\n from where.exe output)
-  nsExec::ExecToStack 'cmd /c where python'
-  Pop $0
-  Pop $1
-  ${If} $0 == 0
-    StrCpy $PythonExe $1 -2
-    ${GetParent} $PythonExe $R0
-    StrCpy $PythonwExe "$R0\pythonw.exe"
-  ${EndIf}
+  ; Note: intentionally NOT using 'where python' — the Windows Store python
+  ; stub lives in WindowsApps and appears in PATH but is not a real Python.
 FunctionEnd
 
 ; ---- Download helpers ----
