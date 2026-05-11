@@ -179,8 +179,10 @@ Section "Install" SEC_MAIN
   ${EndIf}
 
   ; === Kill any running helper before starting the new one ===
-  ; (old helper would block port 7890 via single-instance guard)
-  nsExec::ExecToLog 'taskkill /F /IM pythonw.exe'
+  DetailPrint "Stopping any running VPN helper…"
+  nsExec::ExecToStack 'taskkill /F /IM pythonw.exe'
+  Pop $0
+  Pop $1  ; discard output — "not found" is expected and harmless
   Sleep 1000
 
   ; === Pre-start the helper right now (don't wait for reboot) ===
