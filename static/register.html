@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>VPN Certificate Registration</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#0a0c13;color:#c8cce0;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1.5rem}
+    .card{background:#13151f;border:1px solid #1e2130;border-radius:14px;padding:2rem 2.2rem;width:100%;max-width:480px;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+    h1{font-size:1.25rem;font-weight:600;color:#e4e6f0;margin-bottom:.25rem}
+    .subtitle{font-size:.83rem;color:#555;margin-bottom:1.6rem}
+    .info-table{width:100%;border-collapse:collapse;margin-bottom:1.4rem;font-size:.88rem}
+    .info-table td{padding:.35rem 0}
+    .info-table td:first-child{color:#666;width:110px}
+    .info-table td:last-child{color:#c8cce0;font-weight:500}
+    .badge{display:inline-block;padding:.18rem .6rem;border-radius:20px;font-size:.74rem;font-weight:600;letter-spacing:.04em}
+    .badge-blue{background:#1e2d6e;color:#7aa3ff}
+    .badge-green{background:#1a3a2a;color:#4caf7e}
+    .badge-orange{background:#3a2a10;color:#e0a040}
+    .badge-red{background:#3a1212;color:#e05252}
+    .step{background:#0f1117;border:1px solid #1e2130;border-radius:10px;padding:1.1rem 1.2rem;margin-bottom:1rem}
+    .step-num{display:inline-flex;align-items:center;justify-content:center;width:1.5rem;height:1.5rem;border-radius:50%;background:#1e2d6e;color:#7aa3ff;font-size:.75rem;font-weight:700;margin-right:.55rem;flex-shrink:0}
+    .step-title{font-size:.88rem;font-weight:600;color:#c8cce0;display:flex;align-items:center;margin-bottom:.5rem}
+    .step-body{font-size:.82rem;color:#777;line-height:1.7;padding-left:2.05rem}
+    .step-body code{font-family:monospace;background:#0a0c13;padding:.1rem .35rem;border-radius:4px;color:#a0b0e0;font-size:.8rem}
+    .btn{display:inline-flex;align-items:center;gap:.4rem;padding:.55rem 1.3rem;border-radius:8px;border:none;cursor:pointer;font-size:.88rem;font-weight:600;transition:opacity .15s}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .btn-primary{background:#4f6ef7;color:#fff}
+    .btn-primary:hover:not(:disabled){opacity:.88}
+    .btn-ghost{background:transparent;color:#c0c4dc;border:1px solid #2a2d3e}
+    .btn-ghost:hover:not(:disabled){background:#1a1d2b}
+    .btn-row{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.75rem}
+    .error{color:#e05252;font-size:.82rem;margin-top:.6rem;padding:.5rem .75rem;background:#2a1212;border-radius:6px;display:none}
+    .success-panel{display:none}
+    .spinner{display:inline-block;width:1rem;height:1rem;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .divider{border:none;border-top:1px solid #1e2130;margin:1.2rem 0}
+    .expiry{font-size:.78rem;color:#555;margin-bottom:1.2rem}
+    #done-section{display:none;background:#0f1117;border:1px solid #1e3a28;border-radius:10px;padding:1.2rem;margin-bottom:1rem}
+    #done-section h3{font-size:.95rem;color:#4caf7e;margin-bottom:.75rem}
+    #loading-section{text-align:center;padding:2rem 0;display:none}
+    #loading-section p{color:#555;font-size:.88rem;margin-top:.75rem}
+    #expired-section{text-align:center;padding:2rem 0;display:none}
+    #expired-section p{color:#e05252;font-size:.95rem;margin-bottom:.5rem}
+    #expired-section small{color:#555;font-size:.8rem}
+  </style>
+</head>
+<body>
+<div class="card">
+  <div id="loading-section">
+    <div class="spinner" style="width:2rem;height:2rem;border-width:3px"></div>
+    <p>Verifying registration link…</p>
+  </div>
+
+  <div id="expired-section">
+    <p>This registration link is invalid or has expired.</p>
+    <small>Please contact your administrator for a new link.</small>
+  </div>
+
+  <div id="main-section" style="display:none">
+    <h1>VPN Certificate Registration</h1>
+    <p class="subtitle">Complete the steps below to set up your VPN access.</p>
+
+    <table class="info-table">
+      <tr><td>Username</td><td id="info-username">—</td></tr>
+      <tr><td>Hub</td><td id="info-hub">—</td></tr>
+      <tr><td>Link expires</td><td id="info-expires">—</td></tr>
+      <tr><td>Status</td><td><span id="info-status" class="badge badge-blue">Pending</span></td></tr>
+    </table>
+
+    <div id="generate-section">
+      <div class="step">
+        <div class="step-title"><span class="step-num">1</span>Generate your certificate</div>
+        <div class="step-body">
+          Click the button below. The server will generate a personal certificate and register it to your account.
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btn-generate" onclick="generate()">
+            Generate Certificate
+          </button>
+        </div>
+        <div class="error" id="gen-err"></div>
+      </div>
+    </div>
+
+    <div id="done-section">
+      <h3>&#10003; Certificate generated</h3>
+      <div class="step">
+        <div class="step-title"><span class="step-num">2</span>Download your .p12 file</div>
+        <div class="step-body">
+          Download the certificate package and keep it safe. You will import it into your YubiKey in the next step.<br><br>
+          <strong style="color:#e0a040">Download once only — this link will expire after download.</strong>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btn-p12" onclick="downloadP12()">⬇ Download .p12</button>
+        </div>
+        <div class="error" id="p12-err"></div>
+      </div>
+
+      <div class="step">
+        <div class="step-title"><span class="step-num">3</span>Import into YubiKey</div>
+        <div class="step-body">
+          Run the following command (requires <a href="https://developers.yubico.com/yubikey-manager/" target="_blank" style="color:#7aa3ff">YubiKey Manager</a> to be installed):<br><br>
+          <code id="ykman-cmd">ykman piv certificates import 9a username_hub.p12</code>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-title"><span class="step-num">4</span>Download your VPN profile</div>
+        <div class="step-body">
+          Import this profile into <strong>OpenVPN Connect</strong> (Windows / macOS).<br>
+          After importing: edit the profile → Certificate and Key → Assign → Hardware Tokens → select your YubiKey → enter PIN.<br><br>
+          Requires <a href="https://www.yubico.com/support/download/yubico-piv-tool/" target="_blank" style="color:#7aa3ff">Yubico PIV Tool</a> installed and
+          <code>libykcs11.dll</code> copied to <code>C:\Program Files\OpenVPN Connect\pkcs11_modules\</code>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" id="btn-ovpn" onclick="downloadOvpn()">⬇ .ovpn (OpenVPN Connect)</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="error" id="main-err"></div>
+  </div>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const TOKEN  = params.get('token') || '';
+let _username = '', _hub = '';
+
+function showErr(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg; el.style.display = 'block';
+}
+function hideErr(id) { document.getElementById(id).style.display = 'none'; }
+
+function fmtDate(iso) {
+  try { return new Date(iso + 'Z').toLocaleString(undefined, {dateStyle:'medium',timeStyle:'short'}); }
+  catch { return iso; }
+}
+
+async function init() {
+  document.getElementById('loading-section').style.display = 'block';
+  try {
+    const r = await fetch(`/api/register/${encodeURIComponent(TOKEN)}`);
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    const d = await r.json();
+    _username = d.username; _hub = d.hub;
+    document.getElementById('info-username').textContent = d.username;
+    document.getElementById('info-hub').textContent      = d.hub;
+    document.getElementById('info-expires').textContent  = fmtDate(d.expires_at);
+    document.getElementById('ykman-cmd').textContent     = `ykman piv certificates import 9a ${d.username}_${d.hub}.p12`;
+    if (d.activated) {
+      setActivated();
+    }
+    document.getElementById('loading-section').style.display = 'none';
+    document.getElementById('main-section').style.display    = 'block';
+  } catch(e) {
+    document.getElementById('loading-section').style.display = 'none';
+    document.getElementById('expired-section').style.display = 'block';
+  }
+}
+
+function setActivated() {
+  document.getElementById('generate-section').style.display = 'none';
+  document.getElementById('done-section').style.display     = 'block';
+  const st = document.getElementById('info-status');
+  st.textContent = 'Certificate ready'; st.className = 'badge badge-green';
+}
+
+async function generate() {
+  hideErr('gen-err');
+  const btn = document.getElementById('btn-generate');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Generating…';
+  try {
+    const r = await fetch(`/api/register/${encodeURIComponent(TOKEN)}/activate`, {method:'POST'});
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    setActivated();
+  } catch(e) {
+    showErr('gen-err', e.message);
+    btn.disabled = false;
+    btn.textContent = 'Generate Certificate';
+  }
+}
+
+function downloadP12() {
+  hideErr('p12-err');
+  const a = document.createElement('a');
+  a.href     = `/api/register/${encodeURIComponent(TOKEN)}/p12`;
+  a.download = `${_username}_${_hub}.p12`;
+  a.click();
+  // Mark as used visually
+  setTimeout(() => {
+    const st = document.getElementById('info-status');
+    st.textContent = 'Downloaded'; st.className = 'badge badge-orange';
+    document.getElementById('btn-p12').textContent = '✓ Downloaded';
+  }, 1000);
+}
+
+function downloadOvpn() {
+  const a = document.createElement('a');
+  a.href     = `/api/register/${encodeURIComponent(TOKEN)}/ovpn/connect`;
+  a.download = `${_username}_${_hub}_connect.ovpn`;
+  a.click();
+}
+
+init();
+</script>
+</body>
+</html>
