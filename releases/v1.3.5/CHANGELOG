@@ -1,0 +1,50 @@
+v1.3.5 (2026-05-12)
+-------------------
+Full end-to-end YubiKey registration working on Windows.
+
+Helper (vpnweb-helper.py):
+- Fixed: yubikey-manager 5.9 renamed ManagementKeyAlgorithm → MANAGEMENT_KEY_TYPE;
+  also switched to built-in DEFAULT_MANAGEMENT_KEY constant
+- Fixed: Private Network Access headers added (Access-Control-Allow-Private-Network: true)
+  — Chrome/Opera 104+ blocks fetch() from an HTTPS page to localhost without this
+- Added: /ping endpoint for fast liveness detection (no YubiKey operations)
+- Added: startup logging to helper.log (same directory as script) — pythonw.exe
+  has no console, so all errors were previously invisible
+- Added: support for non-default current PIN — accepts current_pin in /setup
+  request; defaults to factory 123456 if not provided
+
+Registration page (register.html):
+- Fixed: JS syntax error (stray } catch {}) that left the card blank
+- Fixed: browser detection now tries /ping first, falls back to /status for
+  compatibility with older installed helpers
+- Fixed: 'Start VPN Helper' button changed to <a target=_blank> — iframe src
+  for custom protocol was escalating to parent frame and killing the tab
+- Fixed: YubiKey reader errors now shown in red instead of silent 'Insert YubiKey…'
+- Added: checkbox 'My YubiKey already has a non-default PIN' with current PIN field
+- Added: PowerShell fallback command shown after failed Start VPN Helper click
+- Improved: Download installer is now the primary action in the no-helper panel
+
+Installer (setup.nsi / VPNSetup.exe):
+- Fixed: taskkill output suppressed — 'pythonw.exe not found' was alarming users
+  even though it is harmless (just means no old helper was running)
+- Added: Windows Firewall rule for port 7890 (Defender can block loopback in
+  some configurations)
+- Added: helper registered in HKCU Run key — auto-starts on every Windows login
+- Added: kill existing helper before starting new one (prevents instance guard
+  from blocking the updated helper)
+- Simplified: SERVER_URL and token-in-filename removed from installer — the
+  installer is now standalone, no server URL baked in
+- Installer download renamed to VPNSetup.exe (was VPNSetup-TOKEN.exe)
+
+Debugging:
+- helper.log at %LOCALAPPDATA%\vpnweb\helper.log records startup, import errors,
+  and completion — first place to check if helper is not starting
+
+v1.3.4 (2026-05-11)
+-------------------
+Installer completely rewritten for reliability on any Windows PC:
+- Python: winget primary, python.org download fallback; avoids Windows Store stub
+- pip: all packages installed from 6.2MB bundled offline wheels (no internet needed)
+- OpenVPN Connect: installed via winget (non-fatal)
+- Removed Yubico PIV Tool from installer (yubikit uses Windows Smart Card directly)
+- All downloads via PowerShell Invoke-WebRequest (replaced NSISdl, no TLS issues)
