@@ -348,19 +348,20 @@ async function detectHelper() {
 }
 
 async function probeHelper() {
-  // Use /ping (fast, no YubiKey ops) to confirm helper is alive, then /status
-  try {
-    const r = await fetch(`${HELPER}/ping`, {signal: AbortSignal.timeout(2000)});
-    if (!r.ok) return false;
-  } catch {
-    return false;
+  // Try /ping first (new helper); fall back to /status (old helper without /ping)
+  for (const path of ['/ping', '/status']) {
+    try {
+      const r = await fetch(`${HELPER}${path}`, {signal: AbortSignal.timeout(2000)});
+      if (r.ok) {
+        _helperRunning = true;
+        startHeartbeat();
+        hide('yk-no-helper');
+        await checkYubiKey();
+        return true;
+      }
+    } catch {}
   }
-  // Helper is alive — now check for YubiKey
-  _helperRunning = true;
-  startHeartbeat();
-  hide('yk-no-helper');
-  await checkYubiKey();
-  return true;
+  return false;
 }
 
 async function checkYubiKey() {
@@ -384,21 +385,22 @@ async function checkYubiKey() {
 }
 
 function startHelperPoll() {
-  // Polls silently; only updates UI when helper appears
   const iv = setInterval(async () => {
     if (_helperRunning) { clearInterval(iv); return; }
-    try {
-      const r = await fetch(`${HELPER}/ping`, {signal: AbortSignal.timeout(2000)});
-      if (r.ok) {
-        clearInterval(iv);
-        // Confirmed alive — now transition UI
-        _helperRunning = true;
-        startHeartbeat();
-        hide('yk-no-helper');
-        setStatus('', false);
-        await checkYubiKey();
-      }
-    } catch {}
+    for (const path of ['/ping', '/status']) {
+      try {
+        const r = await fetch(`${HELPER}${path}`, {signal: AbortSignal.timeout(2000)});
+        if (r.ok) {
+          clearInterval(iv);
+          _helperRunning = true;
+          startHeartbeat();
+          hide('yk-no-helper');
+          setStatus('', false);
+          await checkYubiKey();
+          return;
+        }
+      } catch {}
+    }
   }, 5000);
 }
 
@@ -412,9 +414,14 @@ function onHelperLaunch() {
   let tries = 0;
   const iv = setInterval(async () => {
     tries++;
-    try {
-      const r = await fetch(`${HELPER}/ping`, {signal: AbortSignal.timeout(1500)});
-      if (r.ok) {
+    let detected = false;
+    for (const path of ['/ping', '/status']) {
+      try {
+        const r = await fetch(`${HELPER}${path}`, {signal: AbortSignal.timeout(1500)});
+        if (r.ok) { detected = true; break; }
+      } catch {}
+    }
+    if (detected) {
         clearInterval(iv);
         _fastPollActive = false;
         _helperRunning = true;
