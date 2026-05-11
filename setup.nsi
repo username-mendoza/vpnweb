@@ -149,6 +149,12 @@ Section "Install" SEC_MAIN
     DetailPrint "Yubico PIV Tool not found — skipping libykcs11.dll (not required for registration)."
   ${EndIf}
 
+  ; === Allow port 7890 through Windows Firewall (loopback only) ===
+  ; Without this, Windows Defender may block the browser's fetch to the helper.
+  nsExec::ExecToLog 'netsh advfirewall firewall add rule name="VPN Web Helper (localhost)" \
+    dir=in action=allow protocol=tcp localport=7890 \
+    remoteip=127.0.0.1 profile=any'
+
   ; === Register vpnreg: URI scheme ===
   Call RegisterUriScheme
 
@@ -262,6 +268,7 @@ Section "Uninstall"
   DeleteRegKey  HKLM "Software\Classes\vpnreg"
   DeleteRegKey  HKLM "${REG_UNINSTALL}"
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "VPNWebHelper"
+  nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="VPN Web Helper (localhost)"'
 
   MessageBox MB_ICONINFORMATION "VPN Setup has been uninstalled.$\r$\nYour YubiKey, Python, and OpenVPN Connect were not affected."
 SectionEnd

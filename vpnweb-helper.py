@@ -1,20 +1,34 @@
 #!/usr/bin/env python3
 """
 vpnweb-helper — local HTTP bridge between the registration browser tab and YubiKey PIV.
-Listens on 127.0.0.1:7890. Started by the browser via vpnreg: URI scheme,
-exits automatically ~20 seconds after the browser tab is closed (heartbeat).
+Listens on 127.0.0.1:7890. Started by installer (pre-start + Windows Run key).
+Exits ~120s after the browser tab closes (heartbeat watchdog).
 """
-import json, os, signal, socket, sys, threading, time
+import os, signal, socket, sys, threading, time
+
+# Log to file — pythonw.exe has no console, errors are otherwise invisible.
+_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helper.log")
+def _log(msg):
+    try:
+        with open(_LOG, "a") as f:
+            import datetime
+            f.write(f"{datetime.datetime.now():%Y-%m-%d %H:%M:%S}  {msg}\n")
+    except Exception:
+        pass
+
+_log("--- helper starting ---")
 
 try:
-    from flask import Flask, request, jsonify
-except ImportError:
-    sys.exit("Missing: pip install flask")
+    from flask import Flask, request, jsonify, make_response
+except ImportError as e:
+    _log(f"FATAL import error: {e}")
+    sys.exit(1)
 
 try:
     import requests as _http
-except ImportError:
-    sys.exit("Missing: pip install requests")
+except ImportError as e:
+    _log(f"FATAL import error: {e}")
+    sys.exit(1)
 
 try:
     from yubikit.piv import (
@@ -24,8 +38,9 @@ try:
     from yubikit.core.smartcard import SmartCardConnection
     from ykman.device import list_all_devices
     from cryptography.hazmat.primitives.serialization import pkcs12 as _pkcs12
-except ImportError:
-    sys.exit("Missing: pip install yubikey-manager")
+except ImportError as e:
+    _log(f"FATAL import error: {e}")
+    sys.exit(1)
 
 PORT = 7890
 
@@ -35,12 +50,15 @@ _probe.settimeout(0.3)
 try:
     _probe.connect(("127.0.0.1", PORT))
     _probe.close()
+    _log("already running — exit")
     sys.exit(0)
 except (ConnectionRefusedError, OSError):
     _probe.close()
 
+_log(f"binding to 127.0.0.1:{PORT}")
+
 # PIV defaults (factory YubiKey)
-_MGMT_KEY   = bytes.fromhex("010203040506070801020304050607080102030405060708")
+_MGMT_KEY    = bytes.fromhex("010203040506070801020304050607080102030405060708")
 _DEFAULT_PIN = "123456"
 _DEFAULT_PUK = "12345678"
 
@@ -60,18 +78,18 @@ def _cors(r):
 @app.route("/", defaults={"p": ""}, methods=["OPTIONS"])
 @app.route("/<path:p>", methods=["OPTIONS"])
 def _preflight(p):
-    from flask import make_response
     resp = make_response("", 204)
     resp.headers["Access-Control-Allow-Private-Network"] = "true"
     return resp
 
-# --- Heartbeat (kills process ~20s after browser tab closes) ---
+# --- Heartbeat watchdog (kills process ~120s after browser tab closes) ---
 _last_beat = time.time()
 
 def _watchdog():
     while True:
         time.sleep(5)
         if time.time() - _last_beat > 120:
+            _log("watchdog timeout — exiting")
             os.kill(os.getpid(), signal.SIGTERM)
 
 threading.Thread(target=_watchdog, daemon=True).start()
@@ -82,7 +100,12 @@ def heartbeat():
     _last_beat = time.time()
     return jsonify({"ok": True})
 
-# --- Status ---
+# --- Ping: fast liveness check, no YubiKey operations ---
+@app.get("/ping")
+def ping():
+    return jsonify({"ok": True})
+
+# --- Status: includes YubiKey detection ---
 @app.get("/status")
 def status():
     try:
@@ -155,7 +178,6 @@ def setup():
                     "error": "Management key authentication failed. "
                              "This YubiKey may already be configured — contact your administrator."}), 400
 
-            # Import private key and certificate into PIV slot 9A
             piv.put_key(SLOT.AUTHENTICATION, private_key, PIN_POLICY.ALWAYS, TOUCH_POLICY.NEVER)
             piv.put_certificate(SLOT.AUTHENTICATION, certificate)
 
@@ -175,14 +197,14 @@ def setup():
 
     serial = info.serial
 
-    # 5. Notify server (mark token used, trigger PIN email)
+    # 5. Notify server
     try:
         _http.post(f"{server_url}/api/register/{token}/complete",
                    json={"pin": new_pin, "serial": str(serial)}, timeout=10)
     except Exception:
-        pass  # Best-effort; don't fail registration over a notification error
+        pass
 
-    # 6. Download .ovpn and import into OpenVPN Connect via file association
+    # 6. Download .ovpn and open with OpenVPN Connect via file association
     ovpn_imported = False
     try:
         ovpn_r = _http.get(f"{server_url}/api/register/{token}/ovpn/connect", timeout=15)
@@ -192,10 +214,10 @@ def setup():
             with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
                 f.write(ovpn_r.content)
                 ovpn_path = f.name
-            _os.startfile(ovpn_path)  # Windows: opens with OpenVPN Connect via .ovpn association
+            _os.startfile(ovpn_path)
             ovpn_imported = True
     except Exception:
-        pass  # Non-fatal — user can download manually from the registration page
+        pass
 
     pkcs11_id = (
         f"pkcs11:model=YubiKey%20YK5;"
@@ -203,9 +225,11 @@ def setup():
         f"manufacturer=Yubico%20%28www.yubico.com%29;"
         f"serial={serial};id=%01"
     )
+    _log(f"setup complete — serial={serial} ovpn_imported={ovpn_imported}")
     return jsonify({"ok": True, "serial": serial, "pkcs11_id": pkcs11_id,
                     "ovpn_imported": ovpn_imported})
 
 
 if __name__ == "__main__":
+    _log("Flask starting")
     app.run(host="127.0.0.1", port=PORT, debug=False)
