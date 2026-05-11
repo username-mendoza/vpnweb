@@ -3403,8 +3403,7 @@ async def download_register_p12_raw(token: str):
 
 @app.get("/api/register/{token}/installer")
 async def download_register_installer(token: str):
-    """Serve VPNSetup.exe with the token embedded in the filename so the
-    installer can extract it and auto-open the registration page on finish."""
+    """Serve VPNSetup.exe, gated by a valid registration token."""
     tokens = _load_tokens()
     rec = tokens.get(token)
     if not rec:
@@ -3415,7 +3414,7 @@ async def download_register_installer(token: str):
     return FileResponse(
         installer,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="VPNSetup-{token}.exe"'},
+        headers={"Content-Disposition": 'attachment; filename="VPNSetup.exe"'},
     )
 
 
