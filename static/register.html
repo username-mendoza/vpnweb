@@ -110,10 +110,10 @@
     <!-- YubiKey setup — single stable panel -->
     <div class="panel" id="s-activated" style="display:none">
 
-      <!-- Status row: small spinner + one-line status, always visible -->
-      <div style="display:flex;align-items:center;gap:.55rem;margin-bottom:.9rem">
-        <span id="yk-spinner" class="spinner" style="color:#4f6ef7;flex-shrink:0"></span>
-        <span id="yk-status-text" style="font-size:.85rem;color:#888">Checking for VPN Setup Helper…</span>
+      <!-- Status row: only shown when there is something meaningful to display -->
+      <div id="yk-status-row" style="display:none;align-items:center;gap:.55rem;margin-bottom:.9rem">
+        <span id="yk-spinner" class="spinner" style="color:#4f6ef7;flex-shrink:0;display:none"></span>
+        <span id="yk-status-text" style="font-size:.85rem;color:#888"></span>
       </div>
 
       <!-- No-helper actions -->
@@ -307,12 +307,18 @@ function onActivated() {
 
 // ---- Helper detection ----
 function setStatus(text, spinning) {
-  document.getElementById('yk-status-text').textContent = text;
-  document.getElementById('yk-spinner').style.display = spinning ? '' : 'none';
+  const row = document.getElementById('yk-status-row');
+  if (text) {
+    document.getElementById('yk-status-text').textContent = text;
+    document.getElementById('yk-spinner').style.display = spinning ? '' : 'none';
+    row.style.display = 'flex';
+  } else {
+    row.style.display = 'none';
+  }
 }
 
 async function detectHelper() {
-  setStatus('Checking for VPN Setup Helper…', true);
+  setStatus('', false);  // silent — nothing shown while checking
   hide('yk-no-helper'); hide('yk-pin-section'); hide('yk-done-section');
 
   try {
