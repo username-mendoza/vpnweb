@@ -93,15 +93,15 @@
       </div>
     </div>
 
-    <!-- Step 1: Generate cert (only shown before activation) -->
-    <div id="s-generate">
-      <div class="panel">
-        <div class="panel-title">Step 1 &mdash; Generate your certificate</div>
-        <div class="panel-body">
-          The server will create a personal certificate for your account.
+    <!-- Generate cert fallback (only shown if auto-activation fails) -->
+    <div id="s-generate" style="display:none">
+      <div class="panel" style="border-color:#3a1212">
+        <div class="panel-title" style="color:#e05252">Certificate generation failed</div>
+        <div class="panel-body" style="margin-bottom:.6rem">
+          Could not prepare your certificate automatically. Please try again.
         </div>
         <div class="btn-row">
-          <button class="btn btn-primary" id="btn-generate" onclick="generate()">Generate Certificate</button>
+          <button class="btn btn-primary" id="btn-generate" onclick="generate()">Try Again</button>
         </div>
         <div class="err" id="gen-err"></div>
       </div>
@@ -120,24 +120,30 @@
         <div class="info-box warn" id="yk-warn"></div>
       </div>
 
-      <!-- No-helper: download installer -->
+      <!-- No-helper: download installer or launch if already installed -->
       <div class="panel" id="s-no-helper" style="display:none">
-        <div class="panel-title">&#8595; Install VPN Setup Package</div>
-        <div class="panel-body">
-          To program your YubiKey automatically, install the VPN Setup Package first,
-          then return to this page.<br><br>
-          The package installs: YubiKey Manager, Yubico PIV Tool, OpenVPN Connect,
-          and the browser helper — all in one step.
+        <div class="panel-title">VPN Setup Required</div>
+        <div class="panel-body" style="margin-bottom:.85rem">
+          The VPN Setup Helper is not running. If you already installed it, click the button
+          below to start it. Otherwise, download and run the installer first.
+        </div>
+        <!-- Launch helper (if already installed) -->
+        <div class="btn-row" style="margin-bottom:.75rem">
+          <a class="btn btn-primary" href="vpnreg:start" onclick="onHelperLaunch()">&#9654; Start VPN Helper</a>
+        </div>
+        <div class="divider"></div>
+        <div style="font-size:.82rem;color:#666;margin-bottom:.6rem">
+          First time? Download the installer — it sets up everything automatically.
         </div>
         <div class="btn-row">
-          <a class="btn btn-primary" href="/static/VPNSetup.exe" download>&#8595; Download VPN Setup Package</a>
+          <a class="btn btn-ghost" href="/static/VPNSetup.exe" download>&#8595; Download VPN Setup Package</a>
         </div>
         <div class="divider"></div>
         <span class="details-link" onclick="document.getElementById('manual-details').style.display='block';this.style.display='none'">
           Skip installer — show manual instructions
         </span>
         <div id="manual-details">
-          <div style="font-size:.82rem;color:#777;line-height:1.8">
+          <div style="font-size:.82rem;color:#777;line-height:1.8;margin-top:.6rem">
             1. Download your certificate file:<br>
             <div class="btn-row" style="margin:.4rem 0"><button class="btn btn-ghost" onclick="downloadP12()">&#8595; Download .p12</button></div>
             2. Import into YubiKey:<br>
@@ -212,12 +218,16 @@
               It has also been emailed to you.
             </div>
           </div>
-          <div style="margin-top:.5rem">
-            Now import your VPN profile into <strong>OpenVPN Connect</strong>.<br>
+          <div id="done-auto-ovpn" style="display:none;margin-top:.5rem">
+            Your VPN profile has been automatically imported into <strong>OpenVPN Connect</strong>.<br>
+            Open OpenVPN Connect, select your YubiKey as the certificate source, and enter your PIN to connect.
+          </div>
+          <div id="done-manual-ovpn" style="display:none;margin-top:.5rem">
+            Download your VPN profile and import it into <strong>OpenVPN Connect</strong>.<br>
             When prompted, select your YubiKey as the certificate source and enter your PIN.
           </div>
         </div>
-        <div class="btn-row">
+        <div id="done-download-row" class="btn-row" style="display:none">
           <button class="btn btn-primary" onclick="downloadOvpn()">&#8595; Download .ovpn (OpenVPN Connect)</button>
         </div>
       </div>
@@ -271,16 +281,30 @@ async function init() {
     _activated = d.activated;
     _used      = d.used;
 
-    hide('s-loading'); block('s-main');
-
     if (_used) {
+      hide('s-loading'); block('s-main');
       setBadge('Registered', 'badge-green');
-      hide('s-generate'); block('s-used');
+      block('s-used');
     } else if (_activated) {
+      hide('s-loading'); block('s-main');
       setBadge('Certificate ready', 'badge-green');
       onActivated();
+    } else {
+      // Auto-activate (generate certificate silently)
+      document.getElementById('loading-msg').textContent = 'Preparing your certificate…';
+      try {
+        const ar = await fetch(`/api/register/${encodeURIComponent(TOKEN)}/activate`, {method:'POST'});
+        if (!ar.ok) throw new Error(((await ar.json().catch(()=>({}))).detail) || ar.statusText);
+        _activated = true;
+        hide('s-loading'); block('s-main');
+        setBadge('Certificate ready', 'badge-green');
+        onActivated();
+      } catch(e) {
+        hide('s-loading'); block('s-main');
+        block('s-generate');
+        showErr('gen-err', e.message || 'Could not generate certificate. Please try again.');
+      }
     }
-    // else: pending — show generate panel (default display)
 
   } catch(e) {
     document.getElementById('expired-msg').textContent = 'Could not reach the server. Please try again.';
@@ -309,7 +333,7 @@ async function generate() {
   } catch(e) {
     showErr('gen-err', e.message);
     btn.disabled = false;
-    btn.textContent = 'Generate Certificate';
+    btn.textContent = 'Try Again';
   }
 }
 
@@ -345,6 +369,26 @@ async function detectHelper() {
     // retry after 8 seconds in case user just installed helper
     setTimeout(detectHelper, 8000);
   }
+}
+
+let _fastPollActive = false;
+function onHelperLaunch() {
+  if (_fastPollActive) return;
+  _fastPollActive = true;
+  let tries = 0;
+  const iv = setInterval(async () => {
+    tries++;
+    try {
+      const r = await fetch(`${HELPER}/status`, {signal: AbortSignal.timeout(1500)});
+      if (r.ok) {
+        clearInterval(iv);
+        _fastPollActive = false;
+        detectHelper();
+        return;
+      }
+    } catch {}
+    if (tries >= 15) { clearInterval(iv); _fastPollActive = false; }
+  }, 2000);
 }
 
 function startKeyPoll() {
@@ -404,12 +448,10 @@ async function startSetup() {
 
   hide('s-pin');
   block('s-programming');
-  document.getElementById('prog-msg').textContent = 'Generating certificate…';
-  await sleep(300);
+  document.getElementById('prog-msg').textContent = 'Programming YubiKey…';
 
   const server_url = location.origin;
   try {
-    document.getElementById('prog-msg').textContent = 'Programming YubiKey…';
     const r = await fetch(`${HELPER}/setup`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -425,13 +467,14 @@ async function startSetup() {
     clearInterval(_heartbeatTimer);
     clearInterval(_pollTimer);
 
-    if (_pinMode === 'generate') {
-      document.getElementById('done-pin').textContent = new_pin;
-      show('pin-reveal');
+    document.getElementById('done-pin').textContent = new_pin;
+    show('pin-reveal');
+
+    if (d.ovpn_imported) {
+      block('done-auto-ovpn');
     } else {
-      // custom pin: user already knows it
-      document.getElementById('done-pin').textContent = new_pin;
-      show('pin-reveal');
+      block('done-manual-ovpn');
+      block('done-download-row');
     }
   } catch(e) {
     hide('s-programming');
@@ -439,8 +482,6 @@ async function startSetup() {
     showErr('setup-err', e.message);
   }
 }
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // ---- Downloads ----
 function downloadP12() {

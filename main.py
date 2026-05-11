@@ -2969,26 +2969,34 @@ async def _send_invite_email(to_email: str, token: str, username: str, hub: str,
     use_ssl = smtp.get("ssl", False)
     starttls = smtp.get("starttls", True) and not use_ssl
 
-    link = f"{base_url.rstrip('/')}/register?token={token}"
+    base = base_url.rstrip('/')
+    installer_url = f"{base}/static/VPNSetup.exe"
+    link = f"{base}/register?token={token}"
     body_text = (
-        f"You have been invited to register your VPN certificate.\n\n"
+        f"You have been invited to set up VPN access.\n\n"
         f"Username : {username}\n"
         f"Hub      : {hub}\n\n"
-        f"Open this link to generate and download your certificate:\n{link}\n\n"
-        f"This link expires in {expiry_hours} hours.\n\n"
-        f"After receiving the .p12 file, import it into your YubiKey:\n"
-        f"  ykman piv certificates import 9a {username}_{hub}.p12\n"
+        f"STEP 1 — Install the VPN Setup Package (Windows only):\n"
+        f"  {installer_url}\n"
+        f"  Run VPNSetup.exe — it installs Python, YubiKey tools, and OpenVPN Connect automatically.\n\n"
+        f"STEP 2 — Insert your YubiKey, then open your registration link:\n"
+        f"  {link}\n\n"
+        f"  Click 'Program my YubiKey' — the page will program your key and import the VPN profile automatically.\n\n"
+        f"This registration link expires in {expiry_hours} hours.\n"
     )
-    body_html = f"""<html><body style="font-family:sans-serif;color:#222">
-<p>You have been invited to register your VPN certificate.</p>
+    body_html = f"""<html><body style="font-family:sans-serif;color:#222;max-width:540px">
+<p>You have been invited to set up VPN access.</p>
 <table style="border-collapse:collapse;margin:.5rem 0">
   <tr><td style="padding:.2rem .8rem .2rem 0"><b>Username</b></td><td>{username}</td></tr>
   <tr><td style="padding:.2rem .8rem .2rem 0"><b>Hub</b></td><td>{hub}</td></tr>
 </table>
-<p><a href="{link}" style="background:#4f6ef7;color:#fff;padding:.5rem 1.2rem;border-radius:6px;text-decoration:none;display:inline-block;margin:.5rem 0">Generate my certificate</a></p>
-<p style="font-size:.85rem;color:#666">Link expires in {expiry_hours} hours.</p>
-<p style="font-size:.85rem;color:#666">After downloading, import into YubiKey:<br>
-<code>ykman piv certificates import 9a {username}_{hub}.p12</code></p>
+<p style="margin-top:1rem"><b>Step 1 — Install the VPN Setup Package</b><br>
+<span style="font-size:.9rem;color:#555">Windows only &mdash; sets up Python, YubiKey tools, and OpenVPN Connect automatically.</span></p>
+<p><a href="{installer_url}" style="background:#2a2d3e;color:#c8cce0;padding:.45rem 1.1rem;border-radius:6px;text-decoration:none;display:inline-block;font-size:.9rem">&#8595; Download VPN Setup Package</a></p>
+<p style="margin-top:1rem"><b>Step 2 — Insert your YubiKey and open your registration link</b><br>
+<span style="font-size:.9rem;color:#555">Click &ldquo;Program my YubiKey&rdquo; &mdash; the page handles everything automatically.</span></p>
+<p><a href="{link}" style="background:#4f6ef7;color:#fff;padding:.5rem 1.2rem;border-radius:6px;text-decoration:none;display:inline-block;margin:.25rem 0">&#128273; Open Registration Page</a></p>
+<p style="font-size:.82rem;color:#999">Registration link expires in {expiry_hours} hours.</p>
 </body></html>"""
 
     msg = MIMEMultipart("alternative")

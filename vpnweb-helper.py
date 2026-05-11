@@ -176,13 +176,29 @@ def setup():
     except Exception:
         pass  # Best-effort; don't fail registration over a notification error
 
+    # 6. Download .ovpn and import into OpenVPN Connect via file association
+    ovpn_imported = False
+    try:
+        ovpn_r = _http.get(f"{server_url}/api/register/{token}/ovpn/connect", timeout=15)
+        if ovpn_r.ok:
+            import tempfile, os as _os
+            suffix = f"_{serial}.ovpn"
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
+                f.write(ovpn_r.content)
+                ovpn_path = f.name
+            _os.startfile(ovpn_path)  # Windows: opens with OpenVPN Connect via .ovpn association
+            ovpn_imported = True
+    except Exception:
+        pass  # Non-fatal — user can download manually from the registration page
+
     pkcs11_id = (
         f"pkcs11:model=YubiKey%20YK5;"
         f"token=YubiKey%20PIV%20%23{serial};"
         f"manufacturer=Yubico%20%28www.yubico.com%29;"
         f"serial={serial};id=%01"
     )
-    return jsonify({"ok": True, "serial": serial, "pkcs11_id": pkcs11_id})
+    return jsonify({"ok": True, "serial": serial, "pkcs11_id": pkcs11_id,
+                    "ovpn_imported": ovpn_imported})
 
 
 if __name__ == "__main__":

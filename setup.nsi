@@ -108,8 +108,15 @@ Section "Install" SEC_MAIN
 
   DetailPrint ""
   DetailPrint "VPN Setup Package installed successfully."
-  DetailPrint "Return to your registration page in the browser to continue."
-  MessageBox MB_ICONINFORMATION "Installation complete!$\r$\n$\r$\nReturn to the VPN registration page in your browser.$\r$\nYour YubiKey will be programmed automatically."
+  DetailPrint "Return to your registration email and click the registration link to continue."
+
+  ; Pre-start the helper so it is ready when user clicks the registration link
+  Call FindPython
+  ${If} $PythonwExe != ""
+    Exec '"$PythonwExe" "${HELPER_DIR}\vpnweb-helper.py"'
+  ${EndIf}
+
+  MessageBox MB_ICONINFORMATION "Installation complete!$\r$\n$\r$\nInsert your YubiKey, then open the registration link from your email.$\r$\nClick 'Program my YubiKey' — the rest is automatic."
 SectionEnd
 
 ; ---- Find Python ----
