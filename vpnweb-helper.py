@@ -120,10 +120,11 @@ def status():
 # --- Setup: full YubiKey programming ---
 @app.post("/setup")
 def setup():
-    data       = request.get_json(silent=True) or {}
-    server_url = data.get("server_url", "").rstrip("/")
-    token      = data.get("token", "")
-    new_pin    = str(data.get("new_pin", ""))
+    data        = request.get_json(silent=True) or {}
+    server_url  = data.get("server_url", "").rstrip("/")
+    token       = data.get("token", "")
+    new_pin     = str(data.get("new_pin", ""))
+    current_pin = str(data.get("current_pin", "")) or _DEFAULT_PIN
 
     if not server_url or not token or not new_pin:
         return jsonify({"ok": False, "error": "Missing server_url, token or new_pin"}), 400
@@ -182,10 +183,10 @@ def setup():
             piv.put_certificate(SLOT.AUTHENTICATION, certificate)
 
             try:
-                piv.change_pin(_DEFAULT_PIN, new_pin)
+                piv.change_pin(current_pin, new_pin)
             except InvalidPinError:
                 return jsonify({"ok": False,
-                    "error": "Could not set PIN — YubiKey may already have a non-default PIN."}), 400
+                    "error": "Current PIN is incorrect — check the PIN and try again."}), 400
 
             try:
                 piv.change_puk(_DEFAULT_PUK, new_puk)

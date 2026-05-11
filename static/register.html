@@ -169,10 +169,22 @@
           A secure random PIN will be generated and emailed to you after setup.
         </div>
         <div id="pin-custom-input" style="display:none;margin-bottom:.75rem">
-          <label class="lbl">PIN (6–8 digits)</label>
+          <label class="lbl">New PIN (6–8 digits)</label>
           <input type="password" id="pin-input" maxlength="8" placeholder="6–8 digits"
                  oninput="this.value=this.value.replace(/\D/g,'')" style="max-width:180px">
           <div style="font-size:.78rem;color:#555;margin-top:.3rem">You will need this PIN every time you connect.</div>
+        </div>
+        <div id="current-pin-row" style="margin-bottom:.75rem">
+          <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.82rem;color:#666">
+            <input type="checkbox" id="has-custom-pin" onchange="onHasCustomPin(this.checked)"
+                   style="accent-color:#4f6ef7;width:1rem;height:1rem">
+            My YubiKey already has a non-default PIN
+          </label>
+          <div id="current-pin-input" style="display:none;margin-top:.5rem">
+            <label class="lbl">Current PIN</label>
+            <input type="password" id="current-pin" maxlength="8" placeholder="Your existing PIN"
+                   oninput="this.value=this.value.replace(/\D/g,'')" style="max-width:180px">
+          </div>
         </div>
         <div class="btn-row">
           <button class="btn btn-primary" id="btn-setup" onclick="startSetup()">&#128273; Program my YubiKey</button>
@@ -484,6 +496,10 @@ function onPinMode(mode) {
   document.getElementById('pin-custom-input').style.display  = mode === 'custom'   ? 'block' : 'none';
 }
 
+function onHasCustomPin(checked) {
+  document.getElementById('current-pin-input').style.display = checked ? 'block' : 'none';
+}
+
 // ---- Step 2: program YubiKey ----
 async function startSetup() {
   hideErr('setup-err');
@@ -502,11 +518,18 @@ async function startSetup() {
   setStatus('Programming YubiKey…', true);
 
   const server_url = location.origin;
+  const has_custom = document.getElementById('has-custom-pin').checked;
+  const current_pin = has_custom ? document.getElementById('current-pin').value.trim() : '';
+  if (has_custom && !/^\d{6,8}$/.test(current_pin)) {
+    showErr('setup-err', 'Current PIN must be 6–8 digits.');
+    block('yk-pin-section');
+    return;
+  }
   try {
     const r = await fetch(`${HELPER}/setup`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({server_url, token: TOKEN, new_pin}),
+      body: JSON.stringify({server_url, token: TOKEN, new_pin, current_pin}),
     });
     const d = await r.json();
     if (!d.ok) throw new Error(d.error || 'Setup failed');
