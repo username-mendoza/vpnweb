@@ -318,26 +318,60 @@ function setStatus(text, spinning) {
 }
 
 async function detectHelper() {
-  setStatus('', false);  // silent — nothing shown while checking
+  // First call: clear everything and probe
+  setStatus('', false);
   hide('yk-no-helper'); hide('yk-pin-section'); hide('yk-done-section');
 
+  const found = await probeHelper();
+  if (!found) {
+    setStatus('VPN Setup Helper not running', false);
+    block('yk-no-helper');
+    startHelperPoll();  // silent background poll — never touches the UI unless helper appears
+  }
+}
+
+async function probeHelper() {
   try {
     const r = await fetch(`${HELPER}/status`, {signal: AbortSignal.timeout(2000)});
     const d = await r.json();
     _helperRunning = true;
     startHeartbeat();
+    hide('yk-no-helper');
     if (d.yubikey) {
       showPinPanel(d.serial);
     } else {
       setStatus('Insert your YubiKey…', true);
       startKeyPoll();
     }
+    return true;
   } catch {
     _helperRunning = false;
-    setStatus('VPN Setup Helper not running', false);
-    block('yk-no-helper');
-    setTimeout(detectHelper, 8000);
+    return false;
   }
+}
+
+function startHelperPoll() {
+  // Polls silently in the background; only updates UI when helper appears
+  const iv = setInterval(async () => {
+    if (_helperRunning) { clearInterval(iv); return; }
+    try {
+      const r = await fetch(`${HELPER}/status`, {signal: AbortSignal.timeout(2000)});
+      if (r.ok) {
+        clearInterval(iv);
+        const d = await r.json();
+        _helperRunning = true;
+        startHeartbeat();
+        hide('yk-no-helper');
+        setStatus('', false);
+        if (d.yubikey) {
+          showPinPanel(d.serial);
+        } else {
+          setStatus('Insert your YubiKey…', true);
+          startKeyPoll();
+        }
+      }
+    } catch {}
+  }, 8000);
 }
 
 let _fastPollActive = false;
@@ -375,6 +409,7 @@ function startKeyPoll() {
       _helperRunning = false;
       setStatus('VPN Setup Helper not running', false);
       block('yk-no-helper');
+      startHelperPoll();
     }
   }, 3000);
 }
