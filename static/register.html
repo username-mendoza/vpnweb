@@ -107,32 +107,21 @@
       </div>
     </div>
 
-    <!-- Step 2: YubiKey setup (shown after activation) -->
-    <div id="s-activated" style="display:none">
+    <!-- YubiKey setup — single stable panel -->
+    <div class="panel" id="s-activated" style="display:none">
 
-      <!-- Helper / YubiKey detection panel -->
-      <div class="panel" id="yk-detect-panel">
-        <div class="panel-title" id="yk-detect-title">
-          <span class="spinner"></span> Checking for VPN Setup Helper…
-        </div>
-        <div class="panel-body" id="yk-detect-body"></div>
-        <div class="err" id="yk-err"></div>
-        <div class="info-box warn" id="yk-warn"></div>
+      <!-- Status row: small spinner + one-line status, always visible -->
+      <div style="display:flex;align-items:center;gap:.55rem;margin-bottom:.9rem">
+        <span id="yk-spinner" class="spinner" style="color:#4f6ef7;flex-shrink:0"></span>
+        <span id="yk-status-text" style="font-size:.85rem;color:#888">Checking for VPN Setup Helper…</span>
       </div>
 
-      <!-- No-helper: download installer or launch if already installed -->
-      <div class="panel" id="s-no-helper" style="display:none">
-        <div class="panel-title">VPN Setup Required</div>
-        <div class="panel-body" style="margin-bottom:.85rem">
-          The VPN Setup Helper is not running. If you already installed it, click the button
-          below to start it. Otherwise, download and run the installer first.
-        </div>
-        <!-- Launch helper (if already installed) -->
-        <div class="btn-row" style="margin-bottom:.75rem">
+      <!-- No-helper actions -->
+      <div id="yk-no-helper" style="display:none">
+        <div class="btn-row" style="margin-bottom:.7rem">
           <a class="btn btn-primary" href="vpnreg:start" onclick="onHelperLaunch()">&#9654; Start VPN Helper</a>
         </div>
-        <div class="divider"></div>
-        <div style="font-size:.82rem;color:#666;margin-bottom:.6rem">
+        <div style="font-size:.8rem;color:#555;margin-bottom:.5rem">
           First time? Download the installer — it sets up everything automatically.
         </div>
         <div class="btn-row">
@@ -155,77 +144,50 @@
         </div>
       </div>
 
-      <!-- No YubiKey inserted -->
-      <div class="panel" id="s-no-key" style="display:none">
-        <div class="panel-title"><span class="spinner"></span> Waiting for YubiKey…</div>
-        <div class="panel-body">
-          Please insert your YubiKey into a USB port. It will be detected automatically.
+      <!-- PIN choice + program button (shown when YubiKey ready) -->
+      <div id="yk-pin-section" style="display:none">
+        <div class="radio-group">
+          <label>
+            <input type="radio" name="pin-mode" value="generate" checked onchange="onPinMode(this.value)">
+            Generate PIN for me
+          </label>
+          <label>
+            <input type="radio" name="pin-mode" value="custom" onchange="onPinMode(this.value)">
+            I'll choose my PIN
+          </label>
         </div>
-      </div>
-
-      <!-- PIN choice -->
-      <div class="panel" id="s-pin" style="display:none">
-        <div class="panel-title" style="color:#4caf7e">&#10003; YubiKey detected</div>
-        <div class="panel-body" id="yk-serial-line" style="margin-bottom:.75rem;color:#888"></div>
-
-        <div style="margin-bottom:.75rem">
-          <div class="radio-group">
-            <label>
-              <input type="radio" name="pin-mode" value="generate" checked onchange="onPinMode(this.value)">
-              Generate PIN for me
-            </label>
-            <label>
-              <input type="radio" name="pin-mode" value="custom" onchange="onPinMode(this.value)">
-              I'll choose my PIN
-            </label>
-          </div>
-          <div id="pin-generate-hint" style="font-size:.8rem;color:#666">
-            A secure random PIN will be generated and emailed to you after setup.
-          </div>
-          <div id="pin-custom-input" style="display:none;margin-top:.5rem">
-            <label class="lbl">PIN (6–8 digits)</label>
-            <input type="password" id="pin-input" maxlength="8" placeholder="6–8 digits"
-                   oninput="this.value=this.value.replace(/\D/g,'')" style="max-width:180px">
-            <div style="font-size:.78rem;color:#555;margin-top:.3rem">You will need this PIN every time you connect.</div>
-          </div>
+        <div id="pin-generate-hint" style="font-size:.8rem;color:#666;margin-bottom:.75rem">
+          A secure random PIN will be generated and emailed to you after setup.
         </div>
-
+        <div id="pin-custom-input" style="display:none;margin-bottom:.75rem">
+          <label class="lbl">PIN (6–8 digits)</label>
+          <input type="password" id="pin-input" maxlength="8" placeholder="6–8 digits"
+                 oninput="this.value=this.value.replace(/\D/g,'')" style="max-width:180px">
+          <div style="font-size:.78rem;color:#555;margin-top:.3rem">You will need this PIN every time you connect.</div>
+        </div>
         <div class="btn-row">
-          <button class="btn btn-primary" id="btn-setup" onclick="startSetup()">
-            &#128273; Program my YubiKey
-          </button>
+          <button class="btn btn-primary" id="btn-setup" onclick="startSetup()">&#128273; Program my YubiKey</button>
         </div>
         <div class="err" id="setup-err"></div>
       </div>
 
-      <!-- Programming in progress -->
-      <div class="panel" id="s-programming" style="display:none">
-        <div class="panel-title"><span class="spinner"></span> <span id="prog-msg">Programming YubiKey…</span></div>
-        <div class="panel-body">
-          Please do not remove the YubiKey. This takes a few seconds.
+      <!-- Done section -->
+      <div id="yk-done-section" style="display:none">
+        <div id="pin-reveal" style="display:none;margin-bottom:.75rem">
+          Your PIN:
+          <div class="pin-big" id="done-pin"></div>
+          <div style="font-size:.78rem;color:#666;margin-top:.25rem">
+            Write it down — you will need it to connect to the VPN.<br>
+            It has also been emailed to you.
+          </div>
         </div>
-      </div>
-
-      <!-- Done -->
-      <div class="panel" id="s-yk-done" style="display:none;border-color:#1a3a2a">
-        <div class="panel-title" style="color:#4caf7e">&#10003; YubiKey programmed successfully!</div>
-        <div class="panel-body">
-          <div id="pin-reveal" style="display:none;margin-bottom:.75rem">
-            Your PIN:
-            <div class="pin-big" id="done-pin"></div>
-            <div style="font-size:.78rem;color:#666;margin-top:.25rem">
-              Write it down — you will need it to connect to the VPN.<br>
-              It has also been emailed to you.
-            </div>
-          </div>
-          <div id="done-auto-ovpn" style="display:none;margin-top:.5rem">
-            Your VPN profile has been automatically imported into <strong>OpenVPN Connect</strong>.<br>
-            Open OpenVPN Connect, select your YubiKey as the certificate source, and enter your PIN to connect.
-          </div>
-          <div id="done-manual-ovpn" style="display:none;margin-top:.5rem">
-            Download your VPN profile and import it into <strong>OpenVPN Connect</strong>.<br>
-            When prompted, select your YubiKey as the certificate source and enter your PIN.
-          </div>
+        <div id="done-auto-ovpn" style="display:none;font-size:.85rem;color:#888;line-height:1.6">
+          Your VPN profile has been automatically imported into <strong style="color:#c8cce0">OpenVPN Connect</strong>.<br>
+          Open it, select your YubiKey as the certificate source, and enter your PIN to connect.
+        </div>
+        <div id="done-manual-ovpn" style="display:none;font-size:.85rem;color:#888;line-height:1.6">
+          Import your VPN profile into <strong style="color:#c8cce0">OpenVPN Connect</strong>.<br>
+          When prompted, select your YubiKey and enter your PIN.
         </div>
         <div id="done-download-row" class="btn-row" style="display:none">
           <button class="btn btn-primary" onclick="downloadOvpn()">&#8595; Download .ovpn (OpenVPN Connect)</button>
@@ -344,29 +306,30 @@ function onActivated() {
 }
 
 // ---- Helper detection ----
+function setStatus(text, spinning) {
+  document.getElementById('yk-status-text').textContent = text;
+  document.getElementById('yk-spinner').style.display = spinning ? '' : 'none';
+}
+
 async function detectHelper() {
-  document.getElementById('yk-detect-title').innerHTML = '<span class="spinner"></span> Checking for VPN Setup Helper…';
-  document.getElementById('yk-detect-body').textContent = '';
-  show('yk-detect-panel');
-  hide('s-no-helper'); hide('s-no-key'); hide('s-pin'); hide('s-programming'); hide('s-yk-done');
+  setStatus('Checking for VPN Setup Helper…', true);
+  hide('yk-no-helper'); hide('yk-pin-section'); hide('yk-done-section');
 
   try {
     const r = await fetch(`${HELPER}/status`, {signal: AbortSignal.timeout(2000)});
     const d = await r.json();
     _helperRunning = true;
     startHeartbeat();
-    hide('yk-detect-panel');
     if (d.yubikey) {
       showPinPanel(d.serial);
     } else {
-      block('s-no-key');
+      setStatus('Insert your YubiKey…', true);
       startKeyPoll();
     }
   } catch {
     _helperRunning = false;
-    hide('yk-detect-panel');
-    block('s-no-helper');
-    // retry after 8 seconds in case user just installed helper
+    setStatus('VPN Setup Helper not running', false);
+    block('yk-no-helper');
     setTimeout(detectHelper, 8000);
   }
 }
@@ -399,14 +362,13 @@ function startKeyPoll() {
       const d = await r.json();
       if (d.yubikey) {
         clearInterval(_pollTimer);
-        hide('s-no-key');
         showPinPanel(d.serial);
       }
     } catch {
       clearInterval(_pollTimer);
       _helperRunning = false;
-      hide('s-no-key');
-      block('s-no-helper');
+      setStatus('VPN Setup Helper not running', false);
+      block('yk-no-helper');
     }
   }, 3000);
 }
@@ -420,10 +382,10 @@ function startHeartbeat() {
 
 // ---- PIN panel ----
 function showPinPanel(serial) {
-  if (serial) {
-    document.getElementById('yk-serial-line').textContent = `Serial: ${serial}`;
-  }
-  block('s-pin');
+  const label = serial ? `YubiKey ready  ·  Serial: ${serial}` : 'YubiKey ready';
+  setStatus(label, false);
+  hide('yk-no-helper');
+  block('yk-pin-section');
 }
 
 function onPinMode(mode) {
@@ -446,9 +408,8 @@ async function startSetup() {
     }
   }
 
-  hide('s-pin');
-  block('s-programming');
-  document.getElementById('prog-msg').textContent = 'Programming YubiKey…';
+  hide('yk-pin-section');
+  setStatus('Programming YubiKey…', true);
 
   const server_url = location.origin;
   try {
@@ -461,14 +422,15 @@ async function startSetup() {
     if (!d.ok) throw new Error(d.error || 'Setup failed');
 
     // Success
-    hide('s-programming');
-    block('s-yk-done');
+    setStatus('YubiKey programmed successfully!', false);
+    document.getElementById('yk-status-text').style.color = '#4caf7e';
     setBadge('Registered', 'badge-green');
     clearInterval(_heartbeatTimer);
     clearInterval(_pollTimer);
 
     document.getElementById('done-pin').textContent = new_pin;
     show('pin-reveal');
+    block('yk-done-section');
 
     if (d.ovpn_imported) {
       block('done-auto-ovpn');
@@ -477,8 +439,8 @@ async function startSetup() {
       block('done-download-row');
     }
   } catch(e) {
-    hide('s-programming');
-    block('s-pin');
+    setStatus('YubiKey ready', false);
+    block('yk-pin-section');
     showErr('setup-err', e.message);
   }
 }

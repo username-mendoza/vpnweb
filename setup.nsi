@@ -60,11 +60,14 @@ Section "Install" SEC_MAIN
   ${EndIf}
 
   ; --- Install Python packages ---
+  DetailPrint "Upgrading pip…"
+  nsExec::ExecToLog '"$PythonExe" -m pip install --upgrade --quiet pip'
+
   DetailPrint "Installing required Python packages…"
-  nsExec::ExecToLog '"$PythonExe" -m pip install --quiet --upgrade flask yubikey-manager requests cryptography'
+  nsExec::ExecToLog '"$PythonExe" -m pip install --quiet --prefer-binary flask yubikey-manager requests cryptography'
   Pop $0
   ${If} $0 != 0
-    MessageBox MB_ICONSTOP "Failed to install Python packages (pip error $0). Check your internet connection and try again."
+    MessageBox MB_ICONSTOP "Failed to install Python packages.$\r$\n$\r$\nPlease check your internet connection and try again.$\r$\nIf the problem persists, run this manually:$\r$\n  python -m pip install flask yubikey-manager requests cryptography"
     Abort
   ${EndIf}
 
@@ -130,7 +133,8 @@ Function FindPython
   Pop $0
   Pop $1
   ${If} $0 == 0
-    StrCpy $PythonExe $1
+    ; Strip trailing \r\n from where output
+    StrCpy $PythonExe $1 -2
     ; pythonw.exe lives in the same directory as python.exe
     ${GetParent} $PythonExe $R0
     StrCpy $PythonwExe "$R0\pythonw.exe"
