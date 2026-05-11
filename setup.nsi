@@ -178,6 +178,11 @@ Section "Install" SEC_MAIN
     DetailPrint "VPN helper added to startup."
   ${EndIf}
 
+  ; === Kill any running helper before starting the new one ===
+  ; (old helper would block port 7890 via single-instance guard)
+  nsExec::ExecToLog 'taskkill /F /IM pythonw.exe'
+  Sleep 1000
+
   ; === Pre-start the helper right now (don't wait for reboot) ===
   ${If} $PythonwExe != ""
     DetailPrint "Starting VPN helper…"
