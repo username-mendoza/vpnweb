@@ -61,14 +61,21 @@ Section "Install" SEC_MAIN
 
   ; --- Install Python packages ---
   DetailPrint "Upgrading pip…"
-  nsExec::ExecToLog '"$PythonExe" -m pip install --upgrade --quiet pip'
+  nsExec::ExecToLog '"$PythonExe" -m pip install --upgrade --quiet --prefer-binary pip'
+  Pop $0
 
   DetailPrint "Installing required Python packages…"
   nsExec::ExecToLog '"$PythonExe" -m pip install --quiet --prefer-binary flask yubikey-manager requests cryptography'
   Pop $0
   ${If} $0 != 0
-    MessageBox MB_ICONSTOP "Failed to install Python packages.$\r$\n$\r$\nPlease check your internet connection and try again.$\r$\nIf the problem persists, run this manually:$\r$\n  python -m pip install flask yubikey-manager requests cryptography"
-    Abort
+    ; Retry with --trusted-host to work around SSL/proxy issues
+    DetailPrint "Retrying with relaxed SSL settings…"
+    nsExec::ExecToLog '"$PythonExe" -m pip install --quiet --prefer-binary --trusted-host pypi.org --trusted-host files.pythonhosted.org flask yubikey-manager requests cryptography'
+    Pop $0
+    ${If} $0 != 0
+      MessageBox MB_ICONSTOP "Failed to install Python packages.$\r$\n$\r$\nYou can finish setup manually — open a Command Prompt and run:$\r$\n  python -m pip install flask yubikey-manager requests cryptography$\r$\n$\r$\nThen re-open your registration link."
+      ; Non-fatal: rest of installer still runs so vpnreg: URI is registered
+    ${EndIf}
   ${EndIf}
 
   ; --- Yubico PIV Tool ---
