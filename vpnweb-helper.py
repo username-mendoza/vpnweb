@@ -65,7 +65,7 @@ _last_beat = time.time()
 def _watchdog():
     while True:
         time.sleep(5)
-        if time.time() - _last_beat > 20:
+        if time.time() - _last_beat > 120:
             os.kill(os.getpid(), signal.SIGTERM)
 
 threading.Thread(target=_watchdog, daemon=True).start()
