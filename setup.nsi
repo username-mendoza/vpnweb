@@ -21,6 +21,10 @@ SetCompressor /SOLID lzma
 !define OVPN_DIR     "$PROGRAMFILES64\OpenVPN Connect"
 !define YUBIPIV_BIN  "$PROGRAMFILES64\Yubico\Yubico PIV Tool\bin"
 
+; Set SERVER_URL to your vpnweb server before building, e.g. https://vpn.example.com
+; Leave empty to disable auto-opening the registration page after install.
+!define SERVER_URL   ""
+
 Name "${APP_NAME} ${APP_VER}"
 OutFile "VPNSetup.exe"
 InstallDir "${HELPER_DIR}"
@@ -36,6 +40,7 @@ Page instfiles
 !include "FileFunc.nsh"
 
 Var /GLOBAL PythonExe
+Var /GLOBAL RegToken
 Var /GLOBAL PythonwExe
 
 ; ---- Main install section ----
@@ -135,15 +140,38 @@ Section "Install" SEC_MAIN
 
   DetailPrint ""
   DetailPrint "VPN Setup Package installed successfully."
-  DetailPrint "Return to your registration email and click the registration link to continue."
 
-  ; Pre-start the helper so it is ready when user clicks the registration link
+  ; Pre-start the helper (120s grace period before watchdog kills it)
   Call FindPython
   ${If} $PythonwExe != ""
     Exec '"$PythonwExe" "${HELPER_DIR}\vpnweb-helper.py"'
   ${EndIf}
 
+  ; --- Extract registration token from installer filename and open browser ---
+  ; Installer is downloaded as VPNSetup-TOKEN.exe via /api/register/TOKEN/installer
+  StrCpy $RegToken ""
+  FileOpen $R7 "$PLUGINSDIR\gettoken.ps1" w
+  FileWrite $R7 "$$n=[IO.Path]::GetFileNameWithoutExtension($\"$EXEFILE$\")$\r$\n"
+  FileWrite $R7 "if($$n -match '^VPNSetup-(.+)$$'){$$matches[1]|Out-File -LiteralPath $\"$PLUGINSDIR\tok.txt$\" -NoNewline -Encoding ASCII}$\r$\n"
+  FileClose $R7
+  nsExec::ExecToLog "powershell -NoProfile -ExecutionPolicy Bypass -File $\"$PLUGINSDIR\gettoken.ps1$\""
+  ${If} ${FileExists} "$PLUGINSDIR\tok.txt"
+    FileOpen $R7 "$PLUGINSDIR\tok.txt" r
+    FileRead $R7 $RegToken
+    FileClose $R7
+  ${EndIf}
+
+!if "${SERVER_URL}" != ""
+  ${If} $RegToken != ""
+    DetailPrint "Opening registration page…"
+    ExecShell "open" "${SERVER_URL}/register?token=$RegToken"
+    MessageBox MB_ICONINFORMATION "Installation complete!$\r$\n$\r$\nYour registration page is opening in the browser.$\r$\nInsert your YubiKey and click 'Program my YubiKey'."
+  ${Else}
+    MessageBox MB_ICONINFORMATION "Installation complete!$\r$\n$\r$\nInsert your YubiKey, then open the registration link from your email.$\r$\nClick 'Program my YubiKey' — the rest is automatic."
+  ${EndIf}
+!else
   MessageBox MB_ICONINFORMATION "Installation complete!$\r$\n$\r$\nInsert your YubiKey, then open the registration link from your email.$\r$\nClick 'Program my YubiKey' — the rest is automatic."
+!endif
 SectionEnd
 
 ; ---- Find Python ----

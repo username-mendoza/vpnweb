@@ -11,7 +11,7 @@ import time
 import pathlib as _pl
 from contextvars import ContextVar
 from fastapi import FastAPI, HTTPException, Request, Response, Depends
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
@@ -2970,7 +2970,7 @@ async def _send_invite_email(to_email: str, token: str, username: str, hub: str,
     starttls = smtp.get("starttls", True) and not use_ssl
 
     base = base_url.rstrip('/')
-    installer_url = f"{base}/static/VPNSetup.exe"
+    installer_url = f"{base}/api/register/{token}/installer"
     link = f"{base}/register?token={token}"
     body_text = (
         f"You have been invited to set up VPN access.\n\n"
@@ -3398,6 +3398,24 @@ async def download_register_p12_raw(token: str):
         content=p12_path.read_bytes(),
         media_type="application/x-pkcs12",
         headers={"Content-Disposition": f'attachment; filename="{username}_{hub}.p12"'}
+    )
+
+
+@app.get("/api/register/{token}/installer")
+async def download_register_installer(token: str):
+    """Serve VPNSetup.exe with the token embedded in the filename so the
+    installer can extract it and auto-open the registration page on finish."""
+    tokens = _load_tokens()
+    rec = tokens.get(token)
+    if not rec:
+        raise HTTPException(404, "Invalid registration token")
+    installer = _pl.Path(__file__).parent / "static" / "VPNSetup.exe"
+    if not installer.exists():
+        raise HTTPException(404, "Installer not available on this server")
+    return FileResponse(
+        installer,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="VPNSetup-{token}.exe"'},
     )
 
 
