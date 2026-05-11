@@ -422,16 +422,15 @@ function onHelperLaunch() {
       } catch {}
     }
     if (detected) {
-        clearInterval(iv);
-        _fastPollActive = false;
-        _helperRunning = true;
-        startHeartbeat();
-        hide('yk-no-helper');
-        setStatus('', false);
-        await checkYubiKey();
-        return;
-      }
-    } catch {}
+      clearInterval(iv);
+      _fastPollActive = false;
+      _helperRunning = true;
+      startHeartbeat();
+      hide('yk-no-helper');
+      setStatus('', false);
+      await checkYubiKey();
+      return;
+    }
     if (tries >= 15) { clearInterval(iv); _fastPollActive = false; }
   }, 2000);
 }
