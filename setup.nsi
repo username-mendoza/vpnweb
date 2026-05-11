@@ -60,6 +60,10 @@ Section "Install" SEC_MAIN
   ${EndIf}
 
   ; --- Install Python packages ---
+  DetailPrint "Ensuring pip is available…"
+  nsExec::ExecToLog '"$PythonExe" -m ensurepip --upgrade'
+  Pop $0
+
   DetailPrint "Upgrading pip…"
   nsExec::ExecToLog '"$PythonExe" -m pip install --upgrade --quiet --prefer-binary pip'
   Pop $0
@@ -135,29 +139,7 @@ Function FindPython
   StrCpy $PythonExe ""
   StrCpy $PythonwExe ""
 
-  ; Check PATH first
-  nsExec::ExecToStack 'cmd /c where python'
-  Pop $0
-  Pop $1
-  ${If} $0 == 0
-    ; Strip trailing \r\n from where output
-    StrCpy $PythonExe $1 -2
-    ; pythonw.exe lives in the same directory as python.exe
-    ${GetParent} $PythonExe $R0
-    StrCpy $PythonwExe "$R0\pythonw.exe"
-    Return
-  ${EndIf}
-
-  ; Check common install locations from registry
-  ReadRegStr $0 HKCU "${PYTHON_REG}\3.12\InstallPath" ""
-  ${If} $0 != ""
-    ${If} ${FileExists} "$0\python.exe"
-      StrCpy $PythonExe  "$0\python.exe"
-      StrCpy $PythonwExe "$0\pythonw.exe"
-      Return
-    ${EndIf}
-  ${EndIf}
-
+  ; 1. System-wide install (InstallAllUsers=1) — most reliable from elevated context
   ReadRegStr $0 HKLM "${PYTHON_REG}\3.12\InstallPath" ""
   ${If} $0 != ""
     ${If} ${FileExists} "$0\python.exe"
@@ -167,15 +149,41 @@ Function FindPython
     ${EndIf}
   ${EndIf}
 
-  ; Check common path patterns for 3.x
+  ; 2. Common filesystem paths for system-wide install
+  ${If} ${FileExists} "$PROGRAMFILES64\Python312\python.exe"
+    StrCpy $PythonExe  "$PROGRAMFILES64\Python312\python.exe"
+    StrCpy $PythonwExe "$PROGRAMFILES64\Python312\pythonw.exe"
+    Return
+  ${EndIf}
+  ${If} ${FileExists} "$PROGRAMFILES\Python312\python.exe"
+    StrCpy $PythonExe  "$PROGRAMFILES\Python312\python.exe"
+    StrCpy $PythonwExe "$PROGRAMFILES\Python312\pythonw.exe"
+    Return
+  ${EndIf}
+
+  ; 3. Per-user install fallback (HKCU)
+  ReadRegStr $0 HKCU "${PYTHON_REG}\3.12\InstallPath" ""
+  ${If} $0 != ""
+    ${If} ${FileExists} "$0\python.exe"
+      StrCpy $PythonExe  "$0\python.exe"
+      StrCpy $PythonwExe "$0\pythonw.exe"
+      Return
+    ${EndIf}
+  ${EndIf}
   ${If} ${FileExists} "$LOCALAPPDATA\Programs\Python\Python312\python.exe"
     StrCpy $PythonExe  "$LOCALAPPDATA\Programs\Python\Python312\python.exe"
     StrCpy $PythonwExe "$LOCALAPPDATA\Programs\Python\Python312\pythonw.exe"
     Return
   ${EndIf}
-  ${If} ${FileExists} "$PROGRAMFILES64\Python312\python.exe"
-    StrCpy $PythonExe  "$PROGRAMFILES64\Python312\python.exe"
-    StrCpy $PythonwExe "$PROGRAMFILES64\Python312\pythonw.exe"
+
+  ; 4. Last resort: PATH lookup (strips trailing \r\n from where.exe output)
+  nsExec::ExecToStack 'cmd /c where python'
+  Pop $0
+  Pop $1
+  ${If} $0 == 0
+    StrCpy $PythonExe $1 -2
+    ${GetParent} $PythonExe $R0
+    StrCpy $PythonwExe "$R0\pythonw.exe"
   ${EndIf}
 FunctionEnd
 
@@ -190,7 +198,7 @@ Function DownloadAndInstallPython
     Abort
   ${EndIf}
   DetailPrint "Installing Python 3.12 (system-wide, add to PATH)…"
-  ExecWait '"$PLUGINSDIR\python-setup.exe" /quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_test=0' $0
+  ExecWait '"$PLUGINSDIR\python-setup.exe" /quiet InstallAllUsers=1 PrependPath=1 Include_pip=1 Include_test=0' $0
   ${If} $0 != 0
     MessageBox MB_ICONSTOP "Python installation returned error $0."
     Abort
