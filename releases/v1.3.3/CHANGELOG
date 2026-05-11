@@ -1,0 +1,116 @@
+v1.3.3 (2026-05-11)
+-------------------
+Completed end-to-end automated YubiKey registration flow:
+
+Registration flow:
+- register.html: certificate is now generated automatically on page load
+  (no separate "Generate Certificate" button); user sees a single action:
+  "Program my YubiKey"
+- register.html: success panel now branches on ovpn_imported — if the helper
+  auto-imported the .ovpn into OpenVPN Connect, shows "profile imported,
+  open OpenVPN Connect and enter your PIN"; otherwise shows manual download
+  button
+- register.html: onHelperLaunch() polls every 2s for up to 30s after user
+  clicks "Start VPN Helper" so the page reacts immediately when helper starts
+- vpnweb-helper.py: after programming the YubiKey, downloads the .ovpn and
+  opens it via os.startfile() (Windows file association → OpenVPN Connect);
+  returns ovpn_imported: true/false in the /setup response
+
+Installer:
+- setup.nsi: pre-starts vpnweb-helper.py at end of install (via pythonw)
+  so helper is already running when user clicks the registration link
+- setup.nsi: updated finish message — "Insert your YubiKey, then open the
+  registration link from your email"
+- setup.nsi: fixed ${StrRep} → ${GetParent} (FileFunc.nsh); StrRep is not
+  a built-in NSIS macro
+- VPNSetup.exe: 174 KB compiled installer, served at /static/VPNSetup.exe
+
+Email:
+- Invite email redesigned: Step 1 = installer download link, Step 2 =
+  registration link; clear instructions matching the automated flow
+- HTML email: styled two-step layout with download button and registration
+  link button
+
+v1.3.2 (2026-05-11)
+-------------------
+Security hardening, bug fixes, YubiKey browser-based automated registration:
+
+Security fixes:
+- Fixed: XSS — hub names, usernames, group names and session names in the
+  admin UI are now HTML-escaped before insertion into innerHTML
+- Fixed: path traversal — hub/username values are validated against a safe
+  name regex and path is resolve()-checked against CERTS_DIR
+- Fixed: race condition — p12 download validates and marks token used
+  atomically inside _tokens_lock
+- Fixed: token reuse — issuing a new invite revokes all outstanding unused
+  tokens for the same hub/user
+- Fixed: cookie SameSite changed from "lax" to "strict"
+- Fixed: sensitive JSON files written with 0o600 permissions
+- Added: rclone remote path validated against allowlist regex before saving
+
+YubiKey browser registration (backend):
+- GET /api/register/{token}/p12-raw — raw p12 bytes, no used-marking
+- GET /api/register/{token}/puk — system PUK, token-gated
+- POST /api/register/{token}/complete — marks token used, records YubiKey in
+  registry, sends PIN email
+- GET/PUT /api/config/puk — admin can view/set the system PUK
+
+YubiKey registry:
+- yubikey_registry.json: each programmed YubiKey recorded with PUK, timestamp,
+  username, hub; full history per serial kept on re-registration
+- GET /api/config/yubikeys — per-serial PUK history for admin UI
+- Settings UI: YubiKey Registry card with serial, last user, PUK (hidden by
+  default), expandable history
+
+Cloud backup (rclone):
+- Replaced Google Drive API / service account with rclone (simpler auth,
+  supports all cloud providers)
+- GET/PUT /api/config/backup, POST /api/config/backup/run
+- Auto-backup after each successful registration; manual "Backup Now" button
+- rclone remote path validated before saving
+
+Installer (setup.nsi / VPNSetup.exe):
+- NSIS Windows installer: downloads and installs Python 3.12, Yubico PIV
+  Tool, OpenVPN Connect if not present
+- pip install flask yubikey-manager requests cryptography
+- Copies libykcs11.dll to OpenVPN Connect pkcs11_modules/
+- Registers vpnreg: URI scheme to launch helper from browser
+- Creates Add/Remove Programs entry
+
+v1.3.1 (2026-05-11)
+-------------------
+- Fixed: .ovpn download blocked after .p12 download (token marked used too
+  early)
+- Fixed: resend invite overwrote cert with blank O/OU/C/ST/L fields
+- Fixed: invite email field not pre-filled with stored address
+- Fixed: SMTP test button was a stub; now calls POST /api/config/smtp/test
+- Fixed: cert_info did not expose individual DN fields
+- Fixed: Create User cert section layout
+
+v1.3.0 (2026-05-11)
+-------------------
+- User self-registration via email invite
+- Registration page (/register?token=...): one-click cert generation, .p12
+  and .ovpn download
+- Token lifecycle: pending → activated → used
+- Resend invite from Edit User modal
+- User email stored in user_meta.json
+- vpnweb Settings: SMTP config, registration settings (token expiry, base URL)
+
+v1.2.0 (2026-04-29)
+-------------------
+- Dual-address profiles
+- Removed NAT-T hint support
+- Fixed saveProfile HTTP status check
+- Profiles gear button on main screen sidebar
+
+v1.1.0 (2026-04-29)
+-------------------
+- Listen port changed to 8080 (HTTP, for HAProxy SSL termination)
+- Cookie renamed to vpnweb_sid
+- All fetch() calls use credentials: 'include'
+- 30-minute inactivity session timeout
+
+v1.0.0 (2026-04-28)
+-------------------
+Initial release.
