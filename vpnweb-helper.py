@@ -33,7 +33,7 @@ except ImportError as e:
 try:
     from yubikit.piv import (
         PivSession, SLOT, PIN_POLICY, TOUCH_POLICY,
-        ManagementKeyAlgorithm, InvalidPinError,
+        MANAGEMENT_KEY_TYPE, DEFAULT_MANAGEMENT_KEY, InvalidPinError,
     )
     from yubikit.core.smartcard import SmartCardConnection
     from ykman.device import list_all_devices
@@ -58,7 +58,7 @@ except (ConnectionRefusedError, OSError):
 _log(f"binding to 127.0.0.1:{PORT}")
 
 # PIV defaults (factory YubiKey)
-_MGMT_KEY    = bytes.fromhex("010203040506070801020304050607080102030405060708")
+_MGMT_KEY    = DEFAULT_MANAGEMENT_KEY
 _DEFAULT_PIN = "123456"
 _DEFAULT_PUK = "12345678"
 
@@ -172,7 +172,7 @@ def setup():
             piv = PivSession(conn)
 
             try:
-                piv.authenticate(ManagementKeyAlgorithm.TDES, _MGMT_KEY)
+                piv.authenticate(MANAGEMENT_KEY_TYPE.TDES, _MGMT_KEY)
             except Exception:
                 return jsonify({"ok": False,
                     "error": "Management key authentication failed. "
