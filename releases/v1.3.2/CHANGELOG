@@ -1,0 +1,142 @@
+v1.3.2 (2026-05-11)
+-------------------
+Security hardening, bug fixes, YubiKey browser-based automated registration:
+
+Security fixes:
+- Fixed: XSS — hub names, usernames, group names and session names in the admin UI
+  are now HTML-escaped before insertion into innerHTML (esc() applied consistently)
+- Fixed: path traversal — hub/username values are validated against a safe-name regex
+  and path is resolve()-checked against CERTS_DIR before any cert file read/write
+- Fixed: race condition — p12 download now validates and marks token used atomically
+  inside _tokens_lock (prevents double-download via concurrent requests)
+- Fixed: token reuse — issuing a new invite now revokes all outstanding unused tokens
+  for the same hub/user before creating the new one
+- Fixed: cookie SameSite changed from "lax" to "strict" (stronger CSRF protection)
+- Fixed: sensitive JSON files (config, tokens, registry, user_meta) now written with
+  0o600 permissions; existing files fixed on first write
+- Added: rclone remote path validated against allowlist regex before saving
+
+YubiKey browser-based automated registration:
+
+- New: vpnweb-helper.py — local Python helper (Flask, port 7890) that bridges
+  the registration browser tab to the YubiKey over CCID/PKCS#11
+  - Single-instance guard (exits silently if already running)
+  - Auto-exits ~20 seconds after browser tab is closed (heartbeat)
+  - POST /setup: fetches p12 + system PUK from server, imports key+cert into
+    slot 9A, sets user-chosen PIN, sets system PUK silently, notifies server
+- New: setup.nsi — NSIS Windows installer (builds VPNSetup.exe):
+  - Downloads and installs Python 3.12, Yubico PIV Tool, OpenVPN Connect
+    only if not already present (registry + filesystem checks)
+  - Runs pip install for helper dependencies (flask, yubikey-manager, etc.)
+  - Copies libykcs11.dll from Yubico PIV Tool to OpenVPN Connect's
+    pkcs11_modules/ directory (enables hardware token detection in OpenVPN)
+  - Registers vpnreg: custom URI scheme so browser can launch helper
+  - Creates Add/Remove Programs entry
+- New backend endpoints (used by vpnweb-helper.py):
+  - GET /api/register/{token}/p12-raw — raw p12 bytes, no used-marking
+  - GET /api/register/{token}/puk — system PUK from config (token-gated)
+  - POST /api/register/{token}/complete — marks token used, sends PIN email
+  - GET/PUT /api/config/puk — admin can set/view the system PUK
+- register.html: full automated flow
+  - Detects helper on localhost:7890 after cert generation
+  - If no helper: prompts user to download VPNSetup.exe; retries every 8s;
+    offers manual fallback (download p12, ykman instructions, ovpn)
+  - If helper running, no YubiKey: "Insert your YubiKey" (polls every 3s)
+  - If helper + YubiKey ready: PIN choice (generate random or enter own),
+    then "Program my YubiKey" → cert generated + YubiKey programmed in one click
+  - On success: shows PIN (if generated), prompts .ovpn download
+  - Heartbeat sent every 10s while page is open (keeps helper alive)
+- PIN email: after successful YubiKey programming, the user's stored email
+  receives their PIN + YubiKey serial number
+- index.html: YubiKey System PUK card in vpnweb Settings
+  - Loads and shows the current system PUK (default: 12345678) in the input field
+  - Admin can set and reveal the system PUK before issuing YubiKeys
+- YubiKey Registry card in vpnweb Settings
+  - Each YubiKey programmed through browser registration is recorded in
+    yubikey_registry.json with the PUK that was set, timestamp, username, hub
+  - Full history per serial: if a key is re-registered, all past entries are kept
+  - Last known PUK shown per key (hidden by default, click "show" to reveal)
+  - Expandable history: older entries shown inline when expanded
+  - Note: if a user changes their PUK manually after registration, this record
+    will be stale — the registry only tracks what the system programmed
+- Google Drive backup of yubikey_registry.json
+  - Service account credentials (paste JSON), target folder ID, auto-backup toggle
+  - Auto-backup fires after each successful YubiKey registration (best-effort)
+  - Manual "Backup Now" button in vpnweb Settings
+  - Last backup timestamp and status shown
+  - Requires: pip install google-api-python-client google-auth
+  - Upload creates the file on first run; subsequent backups overwrite the same file
+    (no duplicates) by searching for existing filename in the configured folder
+
+v1.3.1 (2026-05-11)
+-------------------
+Fixes and polish for the v1.3.0 invite flow:
+
+- Fixed: .ovpn download blocked after .p12 download (token marked used too early;
+  .ovpn contains no private key so it is now always downloadable for activated tokens)
+- Fixed: resend invite overwrote cert with blank O/OU/C/ST/L fields — Edit User now
+  pre-fills all invite cert fields from the existing registered certificate
+- Fixed: invite email field showed "leave blank for saved email" without showing the
+  actual saved address — field is now pre-filled with the stored email
+- Fixed: SMTP test button was a stub ("save first"); now calls POST /api/config/smtp/test
+  and reports success or the exact SMTP error
+- Fixed: cert_info did not expose individual DN fields (O, OU, C, ST, L) — backend
+  _parse_cert_info now returns each component separately
+- Fixed: Create User cert section layout — certificate details card first, then
+  "Send registration link" checkbox below it; email field appears only when checked
+- vpnweb Settings is now a dedicated sidebar nav item (was incorrectly placed inside
+  Server Settings tabs, which is for SoftEther VPN server configuration)
+
+v1.3.0 (2026-05-11)
+-------------------
+- User self-registration via email invite: admin creates user, checks "Send registration
+  link", user receives email with a time-limited token link (72h default, configurable)
+- Registration page (/register?token=...): user clicks one button, server generates RSA
+  cert, registers it to SoftEther, user downloads .p12 and .ovpn (OpenVPN Connect)
+- Token lifecycle: pending → activated (cert generated) → used (p12 downloaded); token
+  is marked used after p12 download; expired/reused tokens show error
+- Resend invite: Edit User modal → Registration Invite section → Send Registration Link;
+  invite status badge shown (Invite pending / Cert generated / Registered)
+- User email stored in user_meta.json (separate from SoftEther, no API interference)
+- vpnweb Settings: new sidebar nav item with SMTP config (host, port, STARTTLS/SSL,
+  user, password, from address) and registration settings (token expiry, base URL)
+- aiosmtplib used for async email delivery
+
+v1.2.0 (2026-04-29)
+-------------------
+- Dual-address profiles: each profile now has a secondary hostname/port tried automatically
+  if the primary is unreachable at login time
+- Removed NAT-T hint support: host/hint format no longer parsed or stripped anywhere —
+  hostname stored and used as-is in both JSON-RPC and vpncmd paths
+- Fixed saveProfile: now checks HTTP response status and shows server error messages
+- Added profiles gear button (⚙) to main screen sidebar — no need to disconnect to edit profiles
+
+v1.1.0 (2026-04-29)
+-------------------
+- Changed listen port from 8443 to 8080 (HTTP, for HAProxy SSL termination upstream)
+  Note: port 443 is occupied by SoftEther VPN server on the same host
+- Renamed session cookie from "session" to "vpnweb_sid" (avoids HAProxy sticky-session conflict)
+- Login endpoint switched to JSONResponse for reliable Set-Cookie delivery
+- All fetch() calls now use credentials: 'include'
+- Added 30-minute inactivity session timeout (auto-logout)
+
+v1.0.0 (2026-04-28)
+-------------------
+Initial release.
+
+Features:
+- FastAPI + single-page JS frontend for SoftEther VPN management
+- Direct JSON-RPC (httpx) and vpncmd subprocess fallback for relay servers
+- Bulk endpoints /api/server/all and /api/hubs/{hub}/all (one round-trip load)
+- Session management with inactivity timeout (cookie: vpnweb_sid)
+- Connection profiles (profiles.json) with per-profile host/port
+- VPN Azure toggle and hostname display (vpncmd fallback, JSON-RPC unsupported)
+- Dynamic DNS hostname display
+- SecureNAT / DHCP config with MAC address display
+- User, group, session, MAC/IP table management per hub
+- Cascade links, L3 switches, listeners, bridges
+- IPSec, OpenVPN, syslog settings
+- Hub create/delete, hub online/offline toggle
+- SVG logo and favicon (blue gradient circle + padlock)
+- vpncmd concurrency semaphore (max 2) for relay server compatibility
+- Debug endpoints: /api/debug/ddns, /api/debug/hub/{hub}/users, /api/debug/vcmd
