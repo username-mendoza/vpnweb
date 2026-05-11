@@ -125,7 +125,7 @@
           First time? Download the installer — it sets up everything automatically.
         </div>
         <div class="btn-row">
-          <a class="btn btn-ghost" href="/static/VPNSetup.exe" download>&#8595; Download VPN Setup Package</a>
+          <a class="btn btn-ghost" id="installer-link" href="/static/VPNSetup.exe" download>&#8595; Download VPN Setup Package</a>
         </div>
         <div class="divider"></div>
         <span class="details-link" onclick="document.getElementById('manual-details').style.display='block';this.style.display='none'">
@@ -188,6 +188,12 @@
         <div id="done-manual-ovpn" style="display:none;font-size:.85rem;color:#888;line-height:1.6">
           Import your VPN profile into <strong style="color:#c8cce0">OpenVPN Connect</strong>.<br>
           When prompted, select your YubiKey and enter your PIN.
+          <div id="done-no-ovpn-app" style="display:none;margin-top:.65rem;padding:.6rem .75rem;background:#1e1a10;border-radius:7px;border:1px solid #3a3010">
+            <strong style="color:#e0a040;font-size:.8rem">OpenVPN Connect not installed?</strong><br>
+            <span style="color:#777;font-size:.8rem">Install it now with Windows Package Manager:</span><br>
+            <code style="font-size:.78rem;color:#a0b0e0;background:#0a0c13;padding:.25rem .5rem;border-radius:4px;display:inline-block;margin:.35rem 0;user-select:all">winget install OpenVPNTechnologies.OpenVPNConnect</code><br>
+            <span style="color:#666;font-size:.77rem">Then open the downloaded .ovpn file below to import your profile.</span>
+          </div>
         </div>
         <div id="done-download-row" class="btn-row" style="display:none">
           <button class="btn btn-primary" onclick="downloadOvpn()">&#8595; Download .ovpn (OpenVPN Connect)</button>
@@ -240,6 +246,8 @@ async function init() {
     document.getElementById('info-expires').textContent  = fmtDate(d.expires_at);
     document.getElementById('ykman-cmd-manual').textContent =
       `ykman piv certificates import 9a ${d.username}_${d.hub}.p12`;
+    // Installer URL embeds the token so the downloaded file is named VPNSetup-TOKEN.exe
+    document.getElementById('installer-link').href = `/api/register/${encodeURIComponent(TOKEN)}/installer`;
     _activated = d.activated;
     _used      = d.used;
 
@@ -494,6 +502,8 @@ async function startSetup() {
     } else {
       block('done-manual-ovpn');
       block('done-download-row');
+      // Show OpenVPN Connect install hint — helper couldn't open the file association
+      block('done-no-ovpn-app');
     }
   } catch(e) {
     setStatus('YubiKey ready', false);

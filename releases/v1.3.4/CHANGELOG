@@ -1,0 +1,57 @@
+v1.3.4 (2026-05-11)
+-------------------
+Installer completely rewritten for reliability on any Windows PC:
+
+Installer (setup.nsi):
+- Python: winget is now the primary install method (built into Windows 10/11,
+  silent, system-wide, no TLS issues); falls back to python.org download only
+  if winget is unavailable
+- Python packages: installed from bundled offline wheels (6.2 MB included in
+  installer) — no internet required for pip, no SSL/proxy failures possible
+- OpenVPN Connect: installed via winget if not already present (non-fatal;
+  installer completes even if winget fails)
+- Removed Yubico PIV Tool install — yubikit speaks Windows Smart Card directly,
+  no extra tool needed; libykcs11.dll still copied opportunistically if already
+  present
+- Removed NSISdl downloads (TLS 1.2 incompatible); all downloads use PowerShell
+  Invoke-WebRequest
+- FindPython no longer uses 'where python' (avoids Windows Store stub at
+  %LOCALAPPDATA%\Microsoft\WindowsApps\python.exe which is not a real Python)
+
+Registration page:
+- Installer download link now uses /api/register/{token}/installer so the
+  downloaded file is named VPNSetup-TOKEN.exe (token is embedded in filename)
+- When OpenVPN Connect auto-import fails, shows winget install command and
+  explains how to open the downloaded .ovpn manually
+- No other UI changes
+
+v1.3.3 (2026-05-11)
+-------------------
+Completed end-to-end automated YubiKey registration flow:
+
+Registration flow:
+- register.html: certificate is now generated automatically on page load
+  (no separate "Generate Certificate" button); user sees a single action:
+  "Program my YubiKey"
+- register.html: success panel now branches on ovpn_imported — if the helper
+  auto-imported the .ovpn into OpenVPN Connect, shows "profile imported,
+  open OpenVPN Connect and enter your PIN"; otherwise shows manual download
+  button
+- register.html: onHelperLaunch() polls every 2s for up to 30s after user
+  clicks "Start VPN Helper" so the page reacts immediately when helper starts
+- vpnweb-helper.py: after programming the YubiKey, downloads the .ovpn and
+  opens it via os.startfile() (Windows file association → OpenVPN Connect);
+  returns ovpn_imported: true/false in the /setup response
+
+Installer:
+- setup.nsi: pre-starts vpnweb-helper.py at end of install (via pythonw)
+  so helper is already running when user clicks the registration link
+- setup.nsi: updated finish message — "Insert your YubiKey, then open the
+  registration link from your email"
+- VPNSetup.exe: 174 KB compiled installer, served at /static/VPNSetup.exe
+
+Email:
+- Invite email redesigned: Step 1 = installer download link, Step 2 =
+  registration link; clear instructions matching the automated flow
+- HTML email: styled two-step layout with download button and registration
+  link button
