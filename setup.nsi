@@ -192,17 +192,24 @@ Function FindPython
   ; stub lives in WindowsApps and appears in PATH but is not a real Python.
 FunctionEnd
 
-; ---- Download helpers ----
+; ---- Download helper (PowerShell Invoke-WebRequest — supports modern TLS) ----
+; Call with $R1 = URL, $R2 = destination path. Sets $0 = 0 on success.
+Function Download
+  DetailPrint "Downloading $R2…"
+  nsExec::ExecToLog "powershell -NoProfile -ExecutionPolicy Bypass -Command $\"Invoke-WebRequest -Uri '$R1' -OutFile '$R2' -UseBasicParsing$\""
+  Pop $0
+FunctionEnd
+
 Function DownloadAndInstallPython
   InitPluginsDir
-  DetailPrint "Downloading Python 3.12…"
-  NSISdl::download "${URL_PYTHON}" "$PLUGINSDIR\python-setup.exe"
-  Pop $0
-  ${If} $0 != "success"
-    MessageBox MB_ICONSTOP "Failed to download Python: $0"
+  StrCpy $R1 "${URL_PYTHON}"
+  StrCpy $R2 "$PLUGINSDIR\python-setup.exe"
+  Call Download
+  ${If} $0 != 0
+    MessageBox MB_ICONSTOP "Failed to download Python 3.12.$\r$\nCheck your internet connection and try again."
     Abort
   ${EndIf}
-  DetailPrint "Installing Python 3.12 (system-wide, add to PATH)…"
+  DetailPrint "Installing Python 3.12…"
   ExecWait '"$PLUGINSDIR\python-setup.exe" /quiet InstallAllUsers=1 PrependPath=1 Include_pip=1 Include_test=0' $0
   ${If} $0 != 0
     MessageBox MB_ICONSTOP "Python installation returned error $0."
@@ -212,12 +219,11 @@ FunctionEnd
 
 Function DownloadAndInstallYubiPIV
   InitPluginsDir
-  DetailPrint "Downloading Yubico PIV Tool…"
-  NSISdl::download "${URL_YUBIPIV}" "$PLUGINSDIR\yubipiv-setup.msi"
-  Pop $0
-  ${If} $0 != "success"
-    DetailPrint "WARNING: Could not download Yubico PIV Tool: $0"
-    DetailPrint "         libykcs11.dll may not be available."
+  StrCpy $R1 "${URL_YUBIPIV}"
+  StrCpy $R2 "$PLUGINSDIR\yubipiv-setup.msi"
+  Call Download
+  ${If} $0 != 0
+    DetailPrint "WARNING: Could not download Yubico PIV Tool — skipping."
     Return
   ${EndIf}
   DetailPrint "Installing Yubico PIV Tool…"
@@ -229,11 +235,11 @@ FunctionEnd
 
 Function DownloadAndInstallOVPN
   InitPluginsDir
-  DetailPrint "Downloading OpenVPN Connect…"
-  NSISdl::download "${URL_OVPN}" "$PLUGINSDIR\openvpn-connect.msi"
-  Pop $0
-  ${If} $0 != "success"
-    DetailPrint "WARNING: Could not download OpenVPN Connect: $0"
+  StrCpy $R1 "${URL_OVPN}"
+  StrCpy $R2 "$PLUGINSDIR\openvpn-connect.msi"
+  Call Download
+  ${If} $0 != 0
+    DetailPrint "WARNING: Could not download OpenVPN Connect — skipping."
     Return
   ${EndIf}
   DetailPrint "Installing OpenVPN Connect…"
