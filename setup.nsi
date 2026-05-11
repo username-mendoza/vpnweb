@@ -20,10 +20,6 @@ SetCompressor /SOLID lzma
 ; Python fallback download (only used if winget fails)
 !define URL_PYTHON   "https://www.python.org/ftp/python/3.12.4/python-3.12.4-amd64.exe"
 
-; Set SERVER_URL to your vpnweb server before building, e.g. https://vpn.example.com
-; Leave empty to disable auto-opening the registration page after install.
-!define SERVER_URL   ""
-
 Name "${APP_NAME} ${APP_VER}"
 OutFile "VPNSetup.exe"
 InstallDir "${HELPER_DIR}"
@@ -40,7 +36,6 @@ Page instfiles
 
 Var /GLOBAL PythonExe
 Var /GLOBAL PythonwExe
-Var /GLOBAL RegToken
 
 ; ---- Main install section ----
 Section "Install" SEC_MAIN
@@ -169,37 +164,21 @@ Section "Install" SEC_MAIN
   DetailPrint ""
   DetailPrint "VPN Setup installed successfully."
 
-  ; === Pre-start the helper ===
+  ; === Add helper to Windows startup (auto-start on every login) ===
+  ; Written to HKCU so it runs as the logged-in user, not SYSTEM.
+  ${If} $PythonwExe != ""
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "VPNWebHelper" \
+      '"$PythonwExe" "${HELPER_DIR}\vpnweb-helper.py"'
+    DetailPrint "VPN helper added to startup."
+  ${EndIf}
+
+  ; === Pre-start the helper right now (don't wait for reboot) ===
   ${If} $PythonwExe != ""
     DetailPrint "Starting VPN helper…"
     Exec '"$PythonwExe" "${HELPER_DIR}\vpnweb-helper.py"'
   ${EndIf}
 
-  ; === Extract registration token from installer filename ===
-  StrCpy $RegToken ""
-  InitPluginsDir
-  FileOpen $R7 "$PLUGINSDIR\gettoken.ps1" w
-  FileWrite $R7 '$$n=[IO.Path]::GetFileNameWithoutExtension("$EXEFILE")$\r$\n'
-  FileWrite $R7 'if($$n -match "^VPNSetup-(.+)$$"){$$matches[1]|Out-File -LiteralPath "$PLUGINSDIR\tok.txt" -NoNewline -Encoding ASCII}$\r$\n'
-  FileClose $R7
-  nsExec::ExecToLog 'powershell -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\gettoken.ps1"'
-  ${If} ${FileExists} "$PLUGINSDIR\tok.txt"
-    FileOpen $R7 "$PLUGINSDIR\tok.txt" r
-    FileRead $R7 $RegToken
-    FileClose $R7
-  ${EndIf}
-
-!if "${SERVER_URL}" != ""
-  ${If} $RegToken != ""
-    DetailPrint "Opening registration page…"
-    ExecShell "open" "${SERVER_URL}/register?token=$RegToken"
-    MessageBox MB_ICONINFORMATION "Installation complete!$\r$\n$\r$\nYour registration page is opening in the browser.$\r$\nInsert your YubiKey and follow the steps."
-  ${Else}
-    MessageBox MB_ICONINFORMATION "Installation complete!$\r$\n$\r$\nOpen the registration link from your email, insert your YubiKey, and follow the steps."
-  ${EndIf}
-!else
-  MessageBox MB_ICONINFORMATION "Installation complete!$\r$\n$\r$\nOpen the registration link from your email, insert your YubiKey, and follow the steps."
-!endif
+  MessageBox MB_ICONINFORMATION "Installation complete!$\r$\n$\r$\nNow open your registration link from the email.$\r$\nInsert your YubiKey when prompted."
 
 SectionEnd
 
@@ -280,8 +259,9 @@ Section "Uninstall"
   Delete "$INSTDIR\uninstall.exe"
   RMDir  "$INSTDIR"
 
-  DeleteRegKey HKLM "Software\Classes\vpnreg"
-  DeleteRegKey HKLM "${REG_UNINSTALL}"
+  DeleteRegKey  HKLM "Software\Classes\vpnreg"
+  DeleteRegKey  HKLM "${REG_UNINSTALL}"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "VPNWebHelper"
 
   MessageBox MB_ICONINFORMATION "VPN Setup has been uninstalled.$\r$\nYour YubiKey, Python, and OpenVPN Connect were not affected."
 SectionEnd

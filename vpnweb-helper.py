@@ -46,18 +46,24 @@ _DEFAULT_PUK = "12345678"
 
 app = Flask(__name__)
 
-# CORS — open; security comes from token validation on the vpnweb server
+# CORS — open; security comes from token validation on the vpnweb server.
+# Access-Control-Allow-Private-Network is required by Chrome 104+ when a
+# public-HTTPS page fetches a localhost endpoint (Private Network Access policy).
 @app.after_request
 def _cors(r):
-    r.headers["Access-Control-Allow-Origin"]  = "*"
-    r.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    r.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    r.headers["Access-Control-Allow-Origin"]          = "*"
+    r.headers["Access-Control-Allow-Methods"]         = "GET, POST, OPTIONS"
+    r.headers["Access-Control-Allow-Headers"]         = "Content-Type"
+    r.headers["Access-Control-Allow-Private-Network"] = "true"
     return r
 
 @app.route("/", defaults={"p": ""}, methods=["OPTIONS"])
 @app.route("/<path:p>", methods=["OPTIONS"])
 def _preflight(p):
-    return "", 204
+    from flask import make_response
+    resp = make_response("", 204)
+    resp.headers["Access-Control-Allow-Private-Network"] = "true"
+    return resp
 
 # --- Heartbeat (kills process ~20s after browser tab closes) ---
 _last_beat = time.time()

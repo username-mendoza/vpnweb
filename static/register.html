@@ -119,7 +119,10 @@
       <!-- No-helper actions -->
       <div id="yk-no-helper" style="display:none">
         <div class="btn-row" style="margin-bottom:.7rem">
-          <button class="btn btn-primary" onclick="onHelperLaunch()">&#9654; Start VPN Helper</button>
+          <!-- target=_blank opens vpnreg: in a new tab — that tab closes/errors,
+               this tab stays. Direct navigation or iframe can kill the current tab. -->
+          <a class="btn btn-primary" href="vpnreg:start" target="_blank" rel="noopener"
+             onclick="onHelperLaunch()">&#9654; Start VPN Helper</a>
         </div>
         <div style="font-size:.8rem;color:#555;margin-bottom:.5rem">
           First time? Download the installer — it sets up everything automatically.
@@ -384,18 +387,11 @@ function startHelperPoll() {
 
 let _fastPollActive = false;
 function onHelperLaunch() {
+  // The <a target="_blank"> already opens vpnreg: in a new tab (safe).
+  // This function just starts fast-polling for the helper to appear.
   if (_fastPollActive) return;
   _fastPollActive = true;
 
-  // Fire vpnreg: via hidden iframe — keeps the current tab intact
-  // (direct <a href> or window.location navigates Opera/Chrome away)
-  const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'display:none;position:fixed;width:0;height:0';
-  document.body.appendChild(iframe);
-  try { iframe.src = 'vpnreg:start'; } catch(e) {}
-  setTimeout(() => iframe.remove(), 3000);
-
-  // Fast-poll every 2s for up to 30s waiting for helper to appear
   let tries = 0;
   const iv = setInterval(async () => {
     tries++;
