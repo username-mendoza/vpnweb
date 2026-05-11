@@ -353,16 +353,28 @@ async function probeHelper() {
   _helperRunning = true;
   startHeartbeat();
   hide('yk-no-helper');
+  await checkYubiKey();
+  return true;
+}
+
+async function checkYubiKey() {
   try {
-    const r2 = await fetch(`${HELPER}/status`, {signal: AbortSignal.timeout(5000)});
-    const d  = await r2.json();
-    if (d.yubikey) { showPinPanel(d.serial); }
-    else { setStatus('Insert your YubiKey…', true); startKeyPoll(); }
+    const r = await fetch(`${HELPER}/status`, {signal: AbortSignal.timeout(5000)});
+    const d = await r.json();
+    if (d.yubikey) {
+      showPinPanel(d.serial);
+    } else if (d.error) {
+      setStatus('YubiKey reader error: ' + d.error, false);
+      document.getElementById('yk-status-text').style.color = '#e05252';
+      startKeyPoll();
+    } else {
+      setStatus('Insert your YubiKey…', true);
+      startKeyPoll();
+    }
   } catch {
     setStatus('Insert your YubiKey…', true);
     startKeyPoll();
   }
-  return true;
 }
 
 function startHelperPoll() {
@@ -378,10 +390,7 @@ function startHelperPoll() {
         startHeartbeat();
         hide('yk-no-helper');
         setStatus('', false);
-        const r2 = await fetch(`${HELPER}/status`, {signal: AbortSignal.timeout(5000)}).catch(() => null);
-        const d  = r2 ? await r2.json().catch(() => ({})) : {};
-        if (d.yubikey) { showPinPanel(d.serial); }
-        else { setStatus('Insert your YubiKey…', true); startKeyPoll(); }
+        await checkYubiKey();
       }
     } catch {}
   }, 5000);
@@ -406,10 +415,7 @@ function onHelperLaunch() {
         startHeartbeat();
         hide('yk-no-helper');
         setStatus('', false);
-        const r2 = await fetch(`${HELPER}/status`, {signal: AbortSignal.timeout(5000)}).catch(() => null);
-        const d  = r2 ? await r2.json().catch(() => ({})) : {};
-        if (d.yubikey) { showPinPanel(d.serial); }
-        else { setStatus('Insert your YubiKey…', true); startKeyPoll(); }
+        await checkYubiKey();
         return;
       }
     } catch {}
@@ -425,10 +431,16 @@ function startKeyPoll() {
       const d = await r.json();
       if (d.yubikey) {
         clearInterval(_pollTimer);
+        document.getElementById('yk-status-text').style.color = '';
         showPinPanel(d.serial);
+      } else if (d.error) {
+        setStatus('YubiKey reader error: ' + d.error, false);
+        document.getElementById('yk-status-text').style.color = '#e05252';
+      } else {
+        setStatus('Insert your YubiKey…', true);
+        document.getElementById('yk-status-text').style.color = '';
       }
     } catch {
-      // Helper went away
       clearInterval(_pollTimer);
       _helperRunning = false;
       hide('yk-pin-section');
