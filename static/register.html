@@ -118,21 +118,27 @@
 
       <!-- No-helper actions -->
       <div id="yk-no-helper" style="display:none">
-        <div class="btn-row" style="margin-bottom:.7rem">
-          <!-- target=_blank opens vpnreg: in a new tab — that tab closes/errors,
-               this tab stays. Direct navigation or iframe can kill the current tab. -->
-          <a class="btn btn-primary" href="vpnreg:start" target="_blank" rel="noopener"
-             onclick="onHelperLaunch()">&#9654; Start VPN Helper</a>
+        <div style="font-size:.85rem;color:#c8cce0;margin-bottom:.75rem">
+          Download and run the installer, then come back to this page.
+        </div>
+        <div class="btn-row" style="margin-bottom:.75rem">
+          <a class="btn btn-primary" id="installer-link" href="/static/VPNSetup.exe" download>&#8595; Download VPN Setup Package</a>
         </div>
         <div style="font-size:.8rem;color:#555;margin-bottom:.5rem">
-          First time? Download the installer — it sets up everything automatically.
+          Already installed? Click below to start the helper manually.
         </div>
-        <div class="btn-row">
-          <a class="btn btn-ghost" id="installer-link" href="/static/VPNSetup.exe" download>&#8595; Download VPN Setup Package</a>
+        <div class="btn-row" style="margin-bottom:.5rem">
+          <a class="btn btn-ghost" href="vpnreg:start" target="_blank" rel="noopener"
+             onclick="onHelperLaunch()">&#9654; Start VPN Helper</a>
+        </div>
+        <div id="ps-hint" style="font-size:.79rem;color:#666;margin-top:.5rem;display:none">
+          If that doesn't work — press <strong style="color:#c8cce0">Win + R</strong>, paste this and press Enter:<br>
+          <code style="display:block;margin:.4rem 0;padding:.4rem .6rem;background:#0a0c13;border-radius:5px;color:#a0b0e0;user-select:all;font-size:.77rem">powershell -Command "& python '$env:LOCALAPPDATA\vpnweb\vpnweb-helper.py'"</code>
+          Then reload this page.
         </div>
         <div class="divider"></div>
         <span class="details-link" onclick="document.getElementById('manual-details').style.display='block';this.style.display='none'">
-          Skip installer — show manual instructions
+          Skip helper — manual YubiKey setup instructions
         </span>
         <div id="manual-details">
           <div style="font-size:.82rem;color:#777;line-height:1.8;margin-top:.6rem">
@@ -398,10 +404,10 @@ function startHelperPoll() {
 
 let _fastPollActive = false;
 function onHelperLaunch() {
-  // The <a target="_blank"> already opens vpnreg: in a new tab (safe).
-  // This function just starts fast-polling for the helper to appear.
   if (_fastPollActive) return;
   _fastPollActive = true;
+  // Show PowerShell fallback after 8s if helper still not detected
+  setTimeout(() => { if (!_helperRunning) block('ps-hint'); }, 8000);
 
   let tries = 0;
   const iv = setInterval(async () => {
