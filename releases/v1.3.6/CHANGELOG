@@ -1,0 +1,23 @@
+v1.3.6 (2026-05-12)
+-------------------
+Installer reliability fixes — tested on fresh Windows PC.
+
+Installer (setup.nsi / VPNSetup.exe):
+- Fixed: pip install now works on truly fresh PCs — removed --no-index so PyPI
+  is used as fallback for any wheel not in the bundle
+- Fixed: added missing Windows-only wheels: pywin32, pywin32-ctypes, colorama
+  (Linux pip does not resolve Windows-conditional deps; these were absent from
+  the bundle and caused pip exit 1 on fresh machines)
+- Fixed: OpenVPN Connect now installs silently — changed winget override from
+  /S (NSIS flag, wrong) to /qn (MSI completely-silent flag); suppresses EULA
+  dialog during install
+- Fixed: OpenVPN Connect install is now synchronous (nsExec blocking) so the
+  "Installation complete" message only appears after it finishes
+- Fixed: installer log now written by Python subprocess (not cmd /c) so it
+  works on corporate PCs where cmd.exe may be restricted
+- Added: C:\Users\Public\vpnlog.txt — full pip output log for diagnostics;
+  easy to find compared to %LOCALAPPDATA%
+
+Debugging:
+- vpnlog.txt at C:\Users\Public\vpnlog.txt captures Python path, version,
+  and full pip output — share with admin if installation fails

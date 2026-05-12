@@ -39,6 +39,11 @@ Var /GLOBAL PythonwExe
 
 ; ---- Main install section ----
 Section "Install" SEC_MAIN
+  ; === Log starts immediately using NSIS native I/O (no cmd.exe needed) ===
+  FileOpen $R0 "C:\Users\Public\vpnlog.txt" w
+  FileWrite $R0 "=== VPN Setup Log ===$\r$\n"
+  FileClose $R0
+
   SetOutPath "${HELPER_DIR}"
 
   ; --- vpnweb-helper.py and offline wheels ---
@@ -49,11 +54,20 @@ Section "Install" SEC_MAIN
 
   ; === Step 1: Python ===
   DetailPrint "=== Step 1/4: Python ==="
+  FileOpen $R0 "C:\Users\Public\vpnlog.txt" a
+  FileWrite $R0 "Step 1: Finding Python$\r$\n"
+  FileClose $R0
   Call FindPython
   ${If} $PythonExe != ""
     DetailPrint "Python already installed: $PythonExe"
+    FileOpen $R0 "C:\Users\Public\vpnlog.txt" a
+    FileWrite $R0 "Found Python: $PythonExe$\r$\n"
+    FileClose $R0
     Goto python_ok
   ${EndIf}
+  FileOpen $R0 "C:\Users\Public\vpnlog.txt" a
+  FileWrite $R0 "Python not found in known locations, trying winget$\r$\n"
+  FileClose $R0
 
   ; Try winget first (Windows 10 1709+ built-in)
   DetailPrint "Installing Python 3.12 via winget…"
@@ -105,35 +119,47 @@ Section "Install" SEC_MAIN
   ; === Step 2: Python packages (offline wheels — no internet needed) ===
   DetailPrint "=== Step 2/4: Python packages ==="
   DetailPrint "Installing from bundled wheels (no internet required)…"
-  nsExec::ExecToStack '"$PythonExe" -m pip install --no-index --find-links "${HELPER_DIR}\wheels" flask yubikey-manager requests cryptography'
+
+  ; Write a small Python script that runs pip and captures full output to log
+  FileOpen $R0 "C:\Users\Public\runpip.py" w
+  FileWrite $R0 "import subprocess, sys$\r$\n"
+  FileWrite $R0 "wheels = r'$LOCALAPPDATA\vpnweb\wheels'$\r$\n"
+  FileWrite $R0 "cmd = [sys.executable, '-m', 'pip', 'install', '--find-links', wheels, 'flask', 'yubikey-manager', 'requests', 'cryptography']$\r$\n"
+  FileWrite $R0 "result = subprocess.run(cmd, capture_output=True, text=True)$\r$\n"
+  FileWrite $R0 "if result.returncode != 0:$\r$\n"
+  FileWrite $R0 "    subprocess.run([sys.executable, '-m', 'ensurepip', '--upgrade'], capture_output=True)$\r$\n"
+  FileWrite $R0 "    result = subprocess.run(cmd, capture_output=True, text=True)$\r$\n"
+  FileWrite $R0 "with open(r'C:\Users\Public\vpnlog.txt', 'a') as f:$\r$\n"
+  FileWrite $R0 "    f.write(result.stdout + result.stderr)$\r$\n"
+  FileWrite $R0 "    f.write('pip exit: ' + str(result.returncode) + chr(10))$\r$\n"
+  FileWrite $R0 "sys.exit(result.returncode)$\r$\n"
+  FileClose $R0
+
+  FileOpen $R0 "C:\Users\Public\vpnlog.txt" a
+  FileWrite $R0 "Python exe: $PythonExe$\r$\n"
+  FileClose $R0
+
+  nsExec::ExecToStack '"$PythonExe" "C:\Users\Public\runpip.py"'
   Pop $0
   Pop $1
   ${If} $0 != 0
-    ; Retry: ensure pip is present first, then try again
-    DetailPrint "Ensuring pip is available…"
-    nsExec::ExecToLog '"$PythonExe" -m ensurepip --upgrade'
-    nsExec::ExecToStack '"$PythonExe" -m pip install --no-index --find-links "${HELPER_DIR}\wheels" flask yubikey-manager requests cryptography'
-    Pop $0
-    Pop $1
-    ${If} $0 != 0
-      MessageBox MB_ICONSTOP "Failed to install Python packages from bundled wheels (exit $0).$\r$\n$\r$\n$1$\r$\n$\r$\nThis is unexpected — please contact your administrator."
-      Abort
-    ${EndIf}
+    MessageBox MB_ICONSTOP "Failed to install Python packages (exit $0).$\r$\n$\r$\nCheck: C:\Users\Public\vpnlog.txt$\r$\n$\r$\nSend that file to your administrator."
+    Abort
   ${EndIf}
   DetailPrint "Python packages installed."
 
-  ; === Step 3: OpenVPN Connect (non-fatal) ===
+  ; === Step 3: OpenVPN Connect ===
   DetailPrint "=== Step 3/4: OpenVPN Connect ==="
   ${If} ${FileExists} "${OVPN_DIR}\OpenVPNConnect.exe"
     DetailPrint "OpenVPN Connect already installed."
   ${Else}
-    DetailPrint "Installing OpenVPN Connect via winget…"
-    nsExec::ExecToLog 'winget install --id OpenVPNTechnologies.OpenVPNConnect --source winget --silent --accept-package-agreements --accept-source-agreements'
+    DetailPrint "Installing OpenVPN Connect (this may take a minute)…"
+    nsExec::ExecToLog 'winget install --id OpenVPNTechnologies.OpenVPNConnect --source winget --silent --accept-package-agreements --accept-source-agreements --override "/qn"'
     Pop $0
     ${If} $0 == 0
       DetailPrint "OpenVPN Connect installed."
     ${Else}
-      DetailPrint "OpenVPN Connect not installed via winget (will show download link at registration)."
+      DetailPrint "OpenVPN Connect could not be installed automatically — a download link will appear on the registration page."
     ${EndIf}
   ${EndIf}
 
