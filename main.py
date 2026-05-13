@@ -1856,7 +1856,20 @@ async def list_users(hub: str, pw: str = Depends(get_password)):
         result = await _rpc_direct("EnumUser", params, host, port, pw)
     except HTTPException:
         result = await _vpncmd_rpc("EnumUser", params, host, port, pw)
-    return result.get("UserList", [])
+    users = result.get("UserList", [])
+    for u in users:
+        p12_path = _cert_path(hub, u.get("Name_str", ""))
+        u["has_p12"] = p12_path.exists()
+        if u.get("AuthType_u32") == 2 and u["has_p12"]:
+            try:
+                _, cert, _ = _pkcs12.load_key_and_certificates(p12_path.read_bytes(), None)
+                try:
+                    u["cert_expires"] = cert.not_valid_after_utc.strftime("%Y-%m-%d")
+                except AttributeError:
+                    u["cert_expires"] = cert.not_valid_after.strftime("%Y-%m-%d")
+            except Exception:
+                pass
+    return users
 
 
 _CERT_FIELD_CANDIDATES = [
@@ -2970,19 +2983,15 @@ async def _send_invite_email(to_email: str, token: str, username: str, hub: str,
     starttls = smtp.get("starttls", True) and not use_ssl
 
     base = base_url.rstrip('/')
-    installer_url = f"{base}/api/register/{token}/installer"
     link = f"{base}/register?token={token}"
     body_text = (
         f"You have been invited to set up VPN access.\n\n"
         f"Username : {username}\n"
         f"Hub      : {hub}\n\n"
-        f"STEP 1 — Install the VPN Setup Package (Windows only):\n"
-        f"  {installer_url}\n"
-        f"  Run VPNSetup.exe — it installs Python, YubiKey tools, and OpenVPN Connect automatically.\n\n"
-        f"STEP 2 — Insert your YubiKey, then open your registration link:\n"
+        f"Open the link below — the page will guide you through downloading the installer,\n"
+        f"programming your YubiKey, and importing your VPN profile:\n\n"
         f"  {link}\n\n"
-        f"  Click 'Program my YubiKey' — the page will program your key and import the VPN profile automatically.\n\n"
-        f"This registration link expires in {expiry_hours} hours.\n"
+        f"This link expires in {expiry_hours} hours.\n"
     )
     body_html = f"""<html><body style="font-family:sans-serif;color:#222;max-width:540px">
 <p>You have been invited to set up VPN access.</p>
@@ -2990,13 +2999,9 @@ async def _send_invite_email(to_email: str, token: str, username: str, hub: str,
   <tr><td style="padding:.2rem .8rem .2rem 0"><b>Username</b></td><td>{username}</td></tr>
   <tr><td style="padding:.2rem .8rem .2rem 0"><b>Hub</b></td><td>{hub}</td></tr>
 </table>
-<p style="margin-top:1rem"><b>Step 1 — Install the VPN Setup Package</b><br>
-<span style="font-size:.9rem;color:#555">Windows only &mdash; sets up Python, YubiKey tools, and OpenVPN Connect automatically.</span></p>
-<p><a href="{installer_url}" style="background:#2a2d3e;color:#c8cce0;padding:.45rem 1.1rem;border-radius:6px;text-decoration:none;display:inline-block;font-size:.9rem">&#8595; Download VPN Setup Package</a></p>
-<p style="margin-top:1rem"><b>Step 2 — Insert your YubiKey and open your registration link</b><br>
-<span style="font-size:.9rem;color:#555">Click &ldquo;Program my YubiKey&rdquo; &mdash; the page handles everything automatically.</span></p>
-<p><a href="{link}" style="background:#4f6ef7;color:#fff;padding:.5rem 1.2rem;border-radius:6px;text-decoration:none;display:inline-block;margin:.25rem 0">&#128273; Open Registration Page</a></p>
-<p style="font-size:.82rem;color:#999">Registration link expires in {expiry_hours} hours.</p>
+<p style="margin-top:1.2rem">Click below to get started &mdash; the page will walk you through downloading the installer, programming your YubiKey, and importing your VPN profile.</p>
+<p style="margin-top:.8rem"><a href="{link}" style="background:#4f6ef7;color:#fff;padding:.55rem 1.3rem;border-radius:6px;text-decoration:none;display:inline-block;font-size:.95rem;font-weight:600">&#128273; Set Up VPN Access</a></p>
+<p style="font-size:.82rem;color:#999;margin-top:1rem">Link expires in {expiry_hours} hours.</p>
 </body></html>"""
 
     msg = MIMEMultipart("alternative")

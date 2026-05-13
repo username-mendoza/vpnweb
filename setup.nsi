@@ -39,9 +39,12 @@ Var /GLOBAL PythonwExe
 
 ; ---- Main install section ----
 Section "Install" SEC_MAIN
-  ; === Log starts immediately using NSIS native I/O (no cmd.exe needed) ===
-  FileOpen $R0 "C:\Users\Public\vpnlog.txt" w
-  FileWrite $R0 "=== VPN Setup Log ===$\r$\n"
+  ; === Log — append so re-runs don't overwrite previous crash info ===
+  nsExec::ExecToStack 'powershell -NoProfile -Command "Get-Date -Format ''yyyy-MM-dd HH:mm:ss''"'
+  Pop $0  ; exit code
+  Pop $1  ; timestamp string
+  FileOpen $R0 "C:\Users\Public\vpnlog.txt" a
+  FileWrite $R0 "$\r$\n=== VPN Setup Run: $1 ===$\r$\n"
   FileClose $R0
 
   SetOutPath "${HELPER_DIR}"
@@ -73,9 +76,18 @@ Section "Install" SEC_MAIN
   DetailPrint "Installing Python 3.12 via winget…"
   nsExec::ExecToLog 'winget install --id Python.Python.3.12 --source winget --silent --accept-package-agreements --accept-source-agreements'
   Pop $0
+  FileOpen $R0 "C:\Users\Public\vpnlog.txt" a
+  FileWrite $R0 "winget Python exit code: $0$\r$\n"
+  FileClose $R0
+  ; Accept 0 (success) and 3010 (success, reboot suggested) and -1978335212 (already installed)
   ${If} $0 == 0
-    DetailPrint "winget install succeeded — locating Python…"
+  ${OrIf} $0 == 3010
+  ${OrIf} $0 == 2316632084
+    DetailPrint "winget Python succeeded (exit $0) — locating Python…"
     Call FindPython
+    FileOpen $R0 "C:\Users\Public\vpnlog.txt" a
+    FileWrite $R0 "FindPython after winget: $PythonExe$\r$\n"
+    FileClose $R0
     ${If} $PythonExe != ""
       Goto python_ok
     ${EndIf}
@@ -152,14 +164,25 @@ Section "Install" SEC_MAIN
   DetailPrint "=== Step 3/4: OpenVPN Connect ==="
   ${If} ${FileExists} "${OVPN_DIR}\OpenVPNConnect.exe"
     DetailPrint "OpenVPN Connect already installed."
+    FileOpen $R0 "C:\Users\Public\vpnlog.txt" a
+    FileWrite $R0 "OpenVPN Connect: already present at ${OVPN_DIR}$\r$\n"
+    FileClose $R0
   ${Else}
-    DetailPrint "Installing OpenVPN Connect (this may take a minute)…"
+    DetailPrint "Installing OpenVPN Connect via winget (this may take a minute)…"
+    FileOpen $R0 "C:\Users\Public\vpnlog.txt" a
+    FileWrite $R0 "OpenVPN Connect: not found, running winget...$\r$\n"
+    FileClose $R0
     nsExec::ExecToLog 'winget install --id OpenVPNTechnologies.OpenVPNConnect --source winget --silent --accept-package-agreements --accept-source-agreements --override "/qn"'
     Pop $0
+    FileOpen $R0 "C:\Users\Public\vpnlog.txt" a
+    FileWrite $R0 "winget OpenVPN Connect exit code: $0$\r$\n"
+    FileClose $R0
     ${If} $0 == 0
+    ${OrIf} $0 == 3010
+    ${OrIf} $0 == 2316632084
       DetailPrint "OpenVPN Connect installed."
     ${Else}
-      DetailPrint "OpenVPN Connect could not be installed automatically — a download link will appear on the registration page."
+      DetailPrint "OpenVPN Connect could not be installed automatically (exit $0) — a download link will appear on the registration page."
     ${EndIf}
   ${EndIf}
 
@@ -222,9 +245,13 @@ Section "Install" SEC_MAIN
 SectionEnd
 
 ; ---- Find Python (never uses PATH — avoids Windows Store stub) ----
+; IMPORTANT: NSIS is a 32-bit process; without SetRegView 64 it reads the
+; WOW6432Node hive, where Python 3.12 x64 is NOT registered.
 Function FindPython
   StrCpy $PythonExe ""
   StrCpy $PythonwExe ""
+
+  SetRegView 64  ; read 64-bit registry hive
 
   ; System-wide install via HKLM (InstallAllUsers=1)
   ReadRegStr $0 HKLM "${PYTHON_REG}\3.12\InstallPath" ""
@@ -232,9 +259,23 @@ Function FindPython
     ${If} ${FileExists} "$0\python.exe"
       StrCpy $PythonExe  "$0\python.exe"
       StrCpy $PythonwExe "$0\pythonw.exe"
+      SetRegView 32
       Return
     ${EndIf}
   ${EndIf}
+
+  ; Per-user install (HKCU)
+  ReadRegStr $0 HKCU "${PYTHON_REG}\3.12\InstallPath" ""
+  ${If} $0 != ""
+    ${If} ${FileExists} "$0\python.exe"
+      StrCpy $PythonExe  "$0\python.exe"
+      StrCpy $PythonwExe "$0\pythonw.exe"
+      SetRegView 32
+      Return
+    ${EndIf}
+  ${EndIf}
+
+  SetRegView 32  ; restore before filesystem checks
 
   ; Common filesystem paths for system-wide install
   ${If} ${FileExists} "$PROGRAMFILES64\Python312\python.exe"
@@ -247,31 +288,16 @@ Function FindPython
     StrCpy $PythonwExe "$PROGRAMFILES\Python312\pythonw.exe"
     Return
   ${EndIf}
-
-  ; Per-user install (HKCU)
-  ReadRegStr $0 HKCU "${PYTHON_REG}\3.12\InstallPath" ""
-  ${If} $0 != ""
-    ${If} ${FileExists} "$0\python.exe"
-      StrCpy $PythonExe  "$0\python.exe"
-      StrCpy $PythonwExe "$0\pythonw.exe"
-      Return
-    ${EndIf}
-  ${EndIf}
   ${If} ${FileExists} "$LOCALAPPDATA\Programs\Python\Python312\python.exe"
     StrCpy $PythonExe  "$LOCALAPPDATA\Programs\Python\Python312\python.exe"
     StrCpy $PythonwExe "$LOCALAPPDATA\Programs\Python\Python312\pythonw.exe"
     Return
   ${EndIf}
-
-  ; winget typically puts Python here (system-wide via MSIX)
   ${If} ${FileExists} "$PROGRAMFILES64\Python\Python312\python.exe"
     StrCpy $PythonExe  "$PROGRAMFILES64\Python\Python312\python.exe"
     StrCpy $PythonwExe "$PROGRAMFILES64\Python\Python312\pythonw.exe"
     Return
   ${EndIf}
-
-  ; Note: intentionally NOT using 'where python' — the Windows Store python
-  ; stub appears in PATH but is not a real Python interpreter.
 FunctionEnd
 
 ; ---- Download via PowerShell (supports TLS 1.2/1.3) ----
@@ -293,15 +319,32 @@ FunctionEnd
 
 ; ---- Uninstall ----
 Section "Uninstall"
+  ; Kill running helper before deleting files (Windows locks files of running processes)
+  DetailPrint "Stopping VPN helper…"
+  nsExec::ExecToStack 'taskkill /F /IM pythonw.exe'
+  Pop $0
+  Pop $1  ; discard — "not found" is expected
+  Sleep 1000
+
+  ; Remove helper files
   Delete "$INSTDIR\vpnweb-helper.py"
   RMDir  /r "$INSTDIR\wheels"
   Delete "$INSTDIR\uninstall.exe"
   RMDir  "$INSTDIR"
 
-  DeleteRegKey  HKLM "Software\Classes\vpnreg"
-  DeleteRegKey  HKLM "${REG_UNINSTALL}"
-  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "VPNWebHelper"
-  nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="VPN Web Helper (localhost)"'
+  ; Remove temp install files
+  Delete "C:\Users\Public\vpnlog.txt"
+  Delete "C:\Users\Public\runpip.py"
 
-  MessageBox MB_ICONINFORMATION "VPN Setup has been uninstalled.$\r$\nYour YubiKey, Python, and OpenVPN Connect were not affected."
+  ; Remove registry entries
+  DeleteRegKey   HKLM "Software\Classes\vpnreg"
+  DeleteRegKey   HKLM "${REG_UNINSTALL}"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "VPNWebHelper"
+
+  ; Remove firewall rule
+  nsExec::ExecToStack 'netsh advfirewall firewall delete rule name="VPN Web Helper (localhost)"'
+  Pop $0
+  Pop $1
+
+  MessageBox MB_ICONINFORMATION "VPN Setup uninstalled.$\r$\n$\r$\nThe following were NOT removed:$\r$\n  - Python$\r$\n  - OpenVPN Connect$\r$\n  - YubiKey contents$\r$\n$\r$\nYou can now re-run VPNSetup.exe to install fresh."
 SectionEnd

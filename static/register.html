@@ -78,6 +78,7 @@
       <tr><td>Hub</td><td id="info-hub">—</td></tr>
       <tr><td>Expires</td><td id="info-expires">—</td></tr>
       <tr><td>Status</td><td><span id="info-status" class="badge badge-blue">Pending</span></td></tr>
+      <tr><td>Installer</td><td><a id="installer-link-top" href="#" download style="font-size:.82rem;color:#4f6ef7;text-decoration:none">&#8595; Download VPNSetup.exe</a></td></tr>
     </table>
 
     <!-- Already registered (used) -->
@@ -267,34 +268,39 @@ async function init() {
     document.getElementById('info-expires').textContent  = fmtDate(d.expires_at);
     document.getElementById('ykman-cmd-manual').textContent =
       `ykman piv certificates import 9a ${d.username}_${d.hub}.p12`;
-    // Installer URL embeds the token so the downloaded file is named VPNSetup-TOKEN.exe
-    document.getElementById('installer-link').href = `/api/register/${encodeURIComponent(TOKEN)}/installer`;
+    const installerUrl = `/api/register/${encodeURIComponent(TOKEN)}/installer`;
+    document.getElementById('installer-link').href     = installerUrl;
+    document.getElementById('installer-link-top').href = installerUrl;
     _activated = d.activated;
     _used      = d.used;
 
+    // Show the page immediately — don't make the user wait for cert generation
+    hide('s-loading'); block('s-main');
+
     if (_used) {
-      hide('s-loading'); block('s-main');
       setBadge('Registered', 'badge-green');
       block('s-used');
-    } else if (_activated) {
-      hide('s-loading'); block('s-main');
-      setBadge('Certificate ready', 'badge-green');
-      onActivated();
-    } else {
-      // Auto-activate (generate certificate silently)
-      document.getElementById('loading-msg').textContent = 'Preparing your certificate…';
+      return;
+    }
+
+    // Start helper polling right away — user may already have the installer running
+    show('s-activated');
+    detectHelper();
+
+    // Generate cert in background (takes <1s; done long before user finishes installing)
+    if (!_activated) {
       try {
         const ar = await fetch(`/api/register/${encodeURIComponent(TOKEN)}/activate`, {method:'POST'});
         if (!ar.ok) throw new Error(((await ar.json().catch(()=>({}))).detail) || ar.statusText);
         _activated = true;
-        hide('s-loading'); block('s-main');
         setBadge('Certificate ready', 'badge-green');
-        onActivated();
       } catch(e) {
-        hide('s-loading'); block('s-main');
+        hide('s-activated');
         block('s-generate');
         showErr('gen-err', e.message || 'Could not generate certificate. Please try again.');
       }
+    } else {
+      setBadge('Certificate ready', 'badge-green');
     }
 
   } catch(e) {

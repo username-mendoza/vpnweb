@@ -239,9 +239,10 @@
           <h3>Users</h3>
           <button class="btn btn-primary btn-sm" onclick="openNewUserModal()">+ New User</button>
         </div>
+        <div id="cert-expiry-banner" style="display:none;background:#3a1f00;border:1px solid #a05000;border-radius:8px;padding:.65rem 1rem;margin-bottom:.85rem;font-size:.85rem;color:#ffb74d"></div>
         <div class="card table-wrap">
           <table>
-            <thead><tr><th>Username</th><th>Real Name</th><th>Group</th><th>Auth</th><th>Last Login</th><th>Logins</th><th></th></tr></thead>
+            <thead><tr><th>Username</th><th>Real Name</th><th>Group</th><th>Auth</th><th>Cert Expires</th><th>Last Login</th><th>Logins</th><th></th></tr></thead>
             <tbody id="users-table"></tbody>
           </table>
         </div>
@@ -675,7 +676,9 @@
     <div id="view-appsettings" class="view" style="display:none">
       <div class="page-header"><h2>vpnweb Settings</h2></div>
       <div class="card-grid">
-        <div class="card" style="max-width:520px">
+
+        <!-- Row 1: SMTP | User Registration -->
+        <div class="card">
           <div class="card-title">SMTP (Outgoing Email)</div>
           <p style="font-size:.82rem;color:#666;margin:-.25rem 0 .85rem">Used to send registration invite links to new users.</p>
           <div class="form-row"><label>SMTP Host</label><input type="text" id="smtp-host" placeholder="smtp.gmail.com"></div>
@@ -699,7 +702,8 @@
           </div>
           <div class="error-msg" id="smtp-err"></div>
         </div>
-        <div class="card" style="max-width:520px">
+
+        <div class="card">
           <div class="card-title">User Registration</div>
           <p style="font-size:.82rem;color:#666;margin:-.25rem 0 .85rem">Settings for the self-registration link sent to new users.</p>
           <div class="form-row"><label>Token Expiry (hours)</label><input type="number" id="reg-expiry" value="72" min="1" max="8760"></div>
@@ -707,7 +711,9 @@
           <button class="btn btn-primary btn-sm" onclick="saveRegConfig()">Save</button>
           <div class="error-msg" id="reg-err"></div>
         </div>
-        <div class="card" style="max-width:520px">
+
+        <!-- Row 2: YubiKey PUK | Registry Backup -->
+        <div class="card">
           <div class="card-title">YubiKey System PUK</div>
           <p style="font-size:.82rem;color:#666;margin:-.25rem 0 .85rem">Set before issuing YubiKeys. The PUK is programmed into each key silently during browser registration and is never shown to the user. Keep a secure copy — it is needed to reset locked keys.</p>
           <div class="form-row">
@@ -720,26 +726,8 @@
           <button class="btn btn-primary btn-sm" onclick="savePuk()">Save</button>
           <div class="error-msg" id="puk-err"></div>
         </div>
-        <div class="card" style="max-width:900px;grid-column:1/-1">
-          <div class="card-title">YubiKey Registry</div>
-          <p style="font-size:.82rem;color:#666;margin:-.25rem 0 .85rem">History of YubiKeys programmed through browser registration. The last known PUK is shown per key — if a user changes their PUK manually afterwards, this record will be stale.</p>
-          <div id="yk-registry-wrap">
-            <table id="yk-registry-table" style="width:100%;border-collapse:collapse;font-size:.83rem;display:none">
-              <thead>
-                <tr style="color:#555;border-bottom:1px solid #1e2130">
-                  <th style="text-align:left;padding:.4rem .6rem;font-weight:500">Serial</th>
-                  <th style="text-align:left;padding:.4rem .6rem;font-weight:500">Last User</th>
-                  <th style="text-align:left;padding:.4rem .6rem;font-weight:500">Last Programmed</th>
-                  <th style="text-align:left;padding:.4rem .6rem;font-weight:500">Last Known PUK</th>
-                  <th style="text-align:left;padding:.4rem .6rem;font-weight:500">History</th>
-                </tr>
-              </thead>
-              <tbody id="yk-registry-body"></tbody>
-            </table>
-            <p id="yk-registry-empty" style="font-size:.83rem;color:#444">No YubiKeys registered yet.</p>
-          </div>
-        </div>
-        <div class="card" style="max-width:640px">
+
+        <div class="card">
           <div class="card-title">Registry Backup</div>
           <p style="font-size:.82rem;color:#666;margin:-.25rem 0 .85rem">
             Backs up <code style="font-size:.78rem">yubikey_registry.json</code> via <strong>rclone</strong>.
@@ -769,6 +757,28 @@
           <div style="font-size:.78rem;color:#555;margin-top:.6rem" id="backup-last"></div>
           <div class="error-msg" id="backup-err"></div>
         </div>
+
+        <!-- Row 3: YubiKey Registry (full width) -->
+        <div class="card" style="grid-column:1/-1">
+          <div class="card-title">YubiKey Registry</div>
+          <p style="font-size:.82rem;color:#666;margin:-.25rem 0 .85rem">History of YubiKeys programmed through browser registration. The last known PUK is shown per key — if a user changes their PUK manually afterwards, this record will be stale.</p>
+          <div id="yk-registry-wrap">
+            <table id="yk-registry-table" style="width:100%;border-collapse:collapse;font-size:.83rem;display:none">
+              <thead>
+                <tr style="color:#555;border-bottom:1px solid #1e2130">
+                  <th style="text-align:left;padding:.4rem .6rem;font-weight:500">Serial</th>
+                  <th style="text-align:left;padding:.4rem .6rem;font-weight:500">Last User</th>
+                  <th style="text-align:left;padding:.4rem .6rem;font-weight:500">Last Programmed</th>
+                  <th style="text-align:left;padding:.4rem .6rem;font-weight:500">Last Known PUK</th>
+                  <th style="text-align:left;padding:.4rem .6rem;font-weight:500">History</th>
+                </tr>
+              </thead>
+              <tbody id="yk-registry-body"></tbody>
+            </table>
+            <p id="yk-registry-empty" style="font-size:.83rem;color:#444">No YubiKeys registered yet.</p>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -1694,19 +1704,47 @@ async function loadUsers() {
   const data = await api('GET', `/api/hubs/${enc(currentHub)}/users`);
   if (!data) return;
   const tb = document.getElementById('users-table');
-  if (!data.length) { tb.innerHTML = `<tr><td colspan="7" class="empty">No users</td></tr>`; return; }
-  tb.innerHTML = data.map(u => `<tr>
+  if (!data.length) { tb.innerHTML = `<tr><td colspan="8" class="empty">No users</td></tr>`; return; }
+
+  const now = new Date();
+  const warn = [];
+  data.forEach(u => {
+    if (!u.cert_expires) return;
+    const days = Math.floor((new Date(u.cert_expires) - now) / 86400000);
+    if (days < 30) warn.push({name: u.Name_str, days});
+  });
+  const banner = document.getElementById('cert-expiry-banner');
+  if (warn.length) {
+    banner.style.display = '';
+    banner.innerHTML = '&#9888; Certificate expiry warning: ' + warn.map(w =>
+      `<strong>${esc(w.name)}</strong> ${w.days < 0 ? 'EXPIRED' : `expires in ${w.days} day${w.days===1?'':'s'}`}`
+    ).join(', ') + ' — open the user and regenerate the certificate.';
+  } else {
+    banner.style.display = 'none';
+  }
+
+  tb.innerHTML = data.map(u => {
+    let expiryCell = '<td>–</td>';
+    if (u.cert_expires) {
+      const days = Math.floor((new Date(u.cert_expires) - now) / 86400000);
+      const cls = days < 0 ? 'color:#f44336' : days < 30 ? 'color:#ffb74d' : 'color:#66bb6a';
+      const label = days < 0 ? 'Expired' : days < 30 ? `${days}d left` : u.cert_expires;
+      expiryCell = `<td style="font-size:.82rem;${cls}">${label}</td>`;
+    }
+    return `<tr>
     <td><strong>${esc(u.Name_str)}</strong></td>
     <td>${esc(u.Realname_utf || '–')}</td>
     <td>${u.GroupName_str ? `<span class="badge badge-yellow">${esc(u.GroupName_str)}</span>` : '–'}</td>
     <td><span class="badge badge-blue">${esc(authType(u.AuthType_u32))}</span></td>
+    ${expiryCell}
     <td>${fmtDate(u.LastLoginTime_dt)}</td>
     <td>${fmt(u.NumLogin_u32)}</td>
     <td style="display:flex;gap:.35rem">
       <button class="btn btn-ghost btn-sm" onclick="openEditUser('${esc(u.Name_str)}')">Edit</button>
       <button class="btn btn-danger btn-sm" onclick="deleteUser('${esc(u.Name_str)}')">Delete</button>
     </td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 }
 function authType(t) { return {0:'Anonymous',1:'Password',2:'UserCert',3:'RootCert',4:'Radius',5:'NT'}[t] ?? t; }
 
