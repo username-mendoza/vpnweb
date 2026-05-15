@@ -28,5 +28,25 @@
       "username": "carol",
       "hub": "CORP"
     }
+  ],
+  "11882450": [
+    {
+      "puk": "12345678",
+      "programmed_at": "2026-05-11T21:01:18.986369",
+      "username": "naujas",
+      "hub": "testhub"
+    },
+    {
+      "puk": "12345678",
+      "programmed_at": "2026-05-12T17:46:59.759065",
+      "username": "lina",
+      "hub": "testhub"
+    },
+    {
+      "puk": "12345678",
+      "programmed_at": "2026-05-14T18:27:07.876580",
+      "username": "lina",
+      "hub": "testhub"
+    }
   ]
 }

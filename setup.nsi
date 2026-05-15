@@ -136,15 +136,26 @@ Section "Install" SEC_MAIN
   FileOpen $R0 "C:\Users\Public\runpip.py" w
   FileWrite $R0 "import subprocess, sys$\r$\n"
   FileWrite $R0 "wheels = r'$LOCALAPPDATA\vpnweb\wheels'$\r$\n"
-  FileWrite $R0 "cmd = [sys.executable, '-m', 'pip', 'install', '--find-links', wheels, 'flask', 'yubikey-manager', 'requests', 'cryptography']$\r$\n"
-  FileWrite $R0 "result = subprocess.run(cmd, capture_output=True, text=True)$\r$\n"
-  FileWrite $R0 "if result.returncode != 0:$\r$\n"
-  FileWrite $R0 "    subprocess.run([sys.executable, '-m', 'ensurepip', '--upgrade'], capture_output=True)$\r$\n"
-  FileWrite $R0 "    result = subprocess.run(cmd, capture_output=True, text=True)$\r$\n"
-  FileWrite $R0 "with open(r'C:\Users\Public\vpnlog.txt', 'a') as f:$\r$\n"
-  FileWrite $R0 "    f.write(result.stdout + result.stderr)$\r$\n"
-  FileWrite $R0 "    f.write('pip exit: ' + str(result.returncode) + chr(10))$\r$\n"
-  FileWrite $R0 "sys.exit(result.returncode)$\r$\n"
+  FileWrite $R0 "pkgs = ['flask', 'yubikey-manager', 'requests', 'cryptography']$\r$\n"
+  FileWrite $R0 "log = open(r'C:\Users\Public\vpnlog.txt', 'a')$\r$\n"
+  FileWrite $R0 "$\r$\n"
+  FileWrite $R0 "# First upgrade pip so it can handle modern wheel metadata (Metadata-Version 2.4)$\r$\n"
+  FileWrite $R0 "r = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', '--quiet', 'pip'], capture_output=True, text=True)$\r$\n"
+  FileWrite $R0 "log.write('=== pip self-upgrade ===\n' + r.stdout + r.stderr + f'exit: {r.returncode}\n\n')$\r$\n"
+  FileWrite $R0 "$\r$\n"
+  FileWrite $R0 "# Attempt 1: offline-only (no PyPI) — clearest error if a wheel is missing$\r$\n"
+  FileWrite $R0 "cmd1 = [sys.executable, '-m', 'pip', 'install', '--find-links', wheels, '--no-index'] + pkgs$\r$\n"
+  FileWrite $R0 "r1 = subprocess.run(cmd1, capture_output=True, text=True)$\r$\n"
+  FileWrite $R0 "log.write('=== pip attempt 1 (offline) ===\n' + r1.stdout + r1.stderr + f'exit: {r1.returncode}\n\n')$\r$\n"
+  FileWrite $R0 "if r1.returncode == 0:$\r$\n"
+  FileWrite $R0 "    log.close(); sys.exit(0)$\r$\n"
+  FileWrite $R0 "$\r$\n"
+  FileWrite $R0 "# Attempt 2: allow PyPI fallback in case a package needs to be downloaded$\r$\n"
+  FileWrite $R0 "cmd2 = [sys.executable, '-m', 'pip', 'install', '--find-links', wheels] + pkgs$\r$\n"
+  FileWrite $R0 "r2 = subprocess.run(cmd2, capture_output=True, text=True)$\r$\n"
+  FileWrite $R0 "log.write('=== pip attempt 2 (PyPI fallback) ===\n' + r2.stdout + r2.stderr + f'exit: {r2.returncode}\n\n')$\r$\n"
+  FileWrite $R0 "log.close()$\r$\n"
+  FileWrite $R0 "sys.exit(r2.returncode)$\r$\n"
   FileClose $R0
 
   FileOpen $R0 "C:\Users\Public\vpnlog.txt" a
@@ -182,7 +193,9 @@ Section "Install" SEC_MAIN
     ${OrIf} $0 == 2316632084
       DetailPrint "OpenVPN Connect installed."
     ${Else}
-      DetailPrint "OpenVPN Connect could not be installed automatically (exit $0) — a download link will appear on the registration page."
+      DetailPrint "OpenVPN Connect could not be installed automatically (exit $0)."
+      MessageBox MB_ICONEXCLAMATION "OpenVPN Connect could not be installed automatically.$\r$\n$\r$\nYour browser will now open the download page.$\r$\nInstall OpenVPN Connect, then click OK.$\r$\n$\r$\n(You can skip this for now — but you will need it to connect to the VPN.)"
+      ExecShell "open" "https://openvpn.net/client/"
     ${EndIf}
   ${EndIf}
 

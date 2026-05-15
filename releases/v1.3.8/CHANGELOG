@@ -1,0 +1,11 @@
+v1.3.8 (2026-05-15)
+-------------------
+Fix: YubiKey not detected by OpenVPN Connect after registration.
+
+Registration (.ovpn profile):
+- Fixed: profile generated during registration now includes pkcs11-providers
+  and pkcs11-id directives so OpenVPN Connect can load libykcs11.dll and
+  locate the correct YubiKey slot automatically — previously these directives
+  were missing and the YubiKey was invisible to OpenVPN Connect
+- vpnweb-helper.py now passes ?serial= when fetching the .ovpn so the
+  provider and key ID are embedded with the correct YubiKey serial number

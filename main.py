@@ -3346,7 +3346,7 @@ async def download_register_p12(token: str):
     )
 
 @app.get("/api/register/{token}/ovpn/connect")
-async def download_register_ovpn_connect(token: str, request: Request):
+async def download_register_ovpn_connect(token: str, request: Request, serial: Optional[str] = None):
     # .ovpn has no private key — allow download even after token is marked used
     tokens = _load_tokens()
     rec = tokens.get(token)
@@ -3369,9 +3369,22 @@ async def download_register_ovpn_connect(token: str, request: Request):
         ca_pem = _der_to_pem(base64.b64decode(info.get("Cert_bin", "")))
     except Exception:
         raise HTTPException(500, "Could not retrieve server CA certificate")
+    pkcs11_lines = ""
+    if serial:
+        pkcs11_id = (
+            f"pkcs11:model=YubiKey%20YK5;"
+            f"token=YubiKey%20PIV%20%23{serial};"
+            f"manufacturer=Yubico%20%28www.yubico.com%29;"
+            f"serial={serial};id=%01"
+        )
+        pkcs11_lines = (
+            f'pkcs11-providers "C:\\\\Program Files\\\\OpenVPN Connect\\\\pkcs11_modules\\\\libykcs11.dll"\n'
+            f"pkcs11-id '{pkcs11_id}'\n\n"
+        )
     ovpn_content = (
         f"client\ndev tun\nproto udp\nremote {ovpn_host} {ovpn_port}\n"
         f"nobind\nremote-cert-tls server\ncipher AES-128-CBC\nverb 3\n\n"
+        f"{pkcs11_lines}"
         f"auth-user-pass\n<auth-user-pass>\n{username}@{hub}\n\n</auth-user-pass>\n\n"
         f"<ca>\n{ca_pem}\n</ca>\n"
     )

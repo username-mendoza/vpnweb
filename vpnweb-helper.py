@@ -208,7 +208,7 @@ def setup():
     # 6. Download .ovpn and open with OpenVPN Connect via file association
     ovpn_imported = False
     try:
-        ovpn_r = _http.get(f"{server_url}/api/register/{token}/ovpn/connect", timeout=15)
+        ovpn_r = _http.get(f"{server_url}/api/register/{token}/ovpn/connect?serial={serial}", timeout=15)
         if ovpn_r.ok:
             import tempfile, os as _os
             suffix = f"_{serial}.ovpn"
