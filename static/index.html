@@ -1525,7 +1525,9 @@ async function _loadHubAllData(hub) {
   _apiCache.set(`/api/hubs/${e}/ip-table`,  bulk.ip       || []);
   _apiCache.set(`/api/hubs/${e}/log`,       bulk.log      || {});
   _apiCache.set(`/api/hubs/${e}/radius`,    bulk.radius   || {});
-  _apiCache.set(`/api/hubs/${e}/securenat`, bulk.securenat|| {});
+  const _snat = bulk.securenat || {};
+  _snat._enabled = !!(bulk.status && bulk.status.SecureNATEnabled_bool);
+  _apiCache.set(`/api/hubs/${e}/securenat`, _snat);
 }
 
 async function doRefresh() {

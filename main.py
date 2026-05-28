@@ -2727,12 +2727,16 @@ async def set_server_password(body: PasswordChange, pw: str = Depends(get_passwo
 
 @app.get("/api/hubs/{hub}/securenat")
 async def get_securenat(hub: str, pw: str = Depends(get_password)):
-    opt, status = await asyncio.gather(
+    opt_r, status_r = await asyncio.gather(
         rpc("GetSecureNATOption", {"RpcHubName_str": hub}, admin_password=pw),
         rpc("GetHubStatus", {"HubName_str": hub}, admin_password=pw),
+        return_exceptions=True,
     )
-    opt["_enabled"] = bool(status.get("SecureNATEnabled_bool", False))
-    return opt
+    if isinstance(opt_r, Exception):
+        raise opt_r
+    status = status_r if not isinstance(status_r, Exception) else {}
+    opt_r["_enabled"] = bool(status.get("SecureNATEnabled_bool", False))
+    return opt_r
 
 class SecureNatConfig(BaseModel):
     enabled: bool = False

@@ -1,0 +1,17 @@
+v1.3.11 (2026-05-28)
+--------------------
+Fix: SecureNAT status always shown as Stopped in hub NAT/DHCP tab.
+
+Root cause was in the frontend bulk cache, not detection:
+- The bulk load (/api/hubs/{hub}/all) cached securenat data without _enabled,
+  so loadNatDhcp() always read _enabled=undefined → false → "Stopped"
+- Fix: inject _enabled from bulk.status.SecureNATEnabled_bool when building
+  the securenat cache entry (data already present, just not wired up)
+
+Also fixed along the way (v1.3.9, v1.3.10):
+- Backend: get_securenat was calling non-existent GetHubSecureNATStatus →
+  now reads SecureNATEnabled_bool from GetHubStatus
+- Backend: vpncmd fallback for GetHubStatus now parses "SecureNAT" field
+  (key confirmed from SoftEther source Command.c PsStatusGet)
+- Backend: asyncio.gather uses return_exceptions=True so a failing
+  GetHubStatus doesn't crash the whole securenat endpoint
