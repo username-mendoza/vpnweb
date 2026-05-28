@@ -1,0 +1,21 @@
+v1.3.12 (2026-05-28)
+--------------------
+Fix: DHCP leases and NAT sessions not shown in hub NAT/DHCP tab.
+
+Two bugs:
+
+1. Indication — backend read "Log" key from EnumNAT/EnumDHCP response but
+   SoftEther JSON-RPC returns "NatTable" / "DhcpTable". Affected all servers,
+   even direct RPC — sessions were always empty regardless of actual activity.
+
+2. Detection — EnumNAT and EnumDHCP had no vpncmd fallback implementation.
+   VPN Azure (NAT-T) servers always returned empty arrays silently.
+   Fixed by implementing NatTable / DhcpTable vpncmd commands with column
+   mapping confirmed from SoftEther source (Command.c PsNatTable/PsDhcpTable).
+
+3. MAC address in DHCP leases displayed as raw base64 (e.g. "yrtzAoQL")
+   instead of AA:BB:CC:DD:EE:FF — fixed by calling _macBinToHex() in the
+   DHCP leases table render (same function already used elsewhere).
+
+Note: hostname column shows only if client included DHCP option 12 in its
+request — expected behaviour, not a bug.

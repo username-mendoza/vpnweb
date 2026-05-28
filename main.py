@@ -1444,6 +1444,44 @@ async def _vpncmd_rpc(method: str, params: dict, host: str, port: int, password:
             "DhcpExpireTimeSpan_u32": _n(dhcp_kv.get("DHCP Lease Expire", dhcp_kv.get("Lease Time", 7200))),
         }
 
+    if method == "EnumNAT":
+        rows = _vc_table(await _vc_in(host, port, password, [f"Hub {hub}", "NatTable"]))
+        _proto_map = {"TCP/IP": 6, "UDP/IP": 17, "DNS": 17, "ICMP": 1}
+        def _parse_size(s):
+            try: return int(s.replace(",", "").strip())
+            except Exception: return 0
+        items = []
+        for r in rows:
+            size = r.get("Receive / Send Size", "")
+            parts = size.split(" / ") if " / " in size else ["0", "0"]
+            items.append({
+                "Id_u32":          _n(r.get("ID", 0)),
+                "Protocol_u32":    _proto_map.get(r.get("Protocol", ""), 0),
+                "SrcIp_ip":        r.get("Source Host", ""),
+                "SrcPort_u32":     _n(r.get("Source Port", 0)),
+                "DestIp_ip":       r.get("Destination Host", ""),
+                "DestPort_u32":    _n(r.get("Destination Port", 0)),
+                "CreatedTime_dt":  r.get("Session Created On", ""),
+                "LastCommTime_dt": r.get("Last Communication Time", ""),
+                "RecvSize_u64":    _parse_size(parts[0]),
+                "SendSize_u64":    _parse_size(parts[1]) if len(parts) > 1 else 0,
+            })
+        return {"NatTable": items, "HubName_str": hub, "NumItem_u32": len(items)}
+
+    if method == "EnumDHCP":
+        rows = _vc_table(await _vc_in(host, port, password, [f"Hub {hub}", "DhcpTable"]))
+        items = []
+        for r in rows:
+            items.append({
+                "Id_u32":        _n(r.get("ID", 0)),
+                "LeasedTime_dt": r.get("Leased at", ""),
+                "ExpireTime_dt": r.get("Expires at", ""),
+                "MacAddress_bin": r.get("MAC Address", ""),
+                "IpAddress_ip":  r.get("Allocated IP", ""),
+                "Hostname_str":  r.get("Client Host Name", ""),
+            })
+        return {"DhcpTable": items, "HubName_str": hub, "NumItem_u32": len(items)}
+
     # ── Not implemented via vpncmd (write ops needing direct TCP) ────────────
     raise HTTPException(501, f"Method '{method}' requires a direct TCP connection to the server")
 
@@ -2794,7 +2832,7 @@ async def get_securenat_sessions(hub: str, pw: str = Depends(get_password)):
     try:
         nat = await rpc("EnumNAT", {"HubName_str": hub}, admin_password=pw)
         dhcp = await rpc("EnumDHCP", {"HubName_str": hub}, admin_password=pw)
-        return {"nat": nat.get("Log", []), "dhcp": dhcp.get("Log", [])}
+        return {"nat": nat.get("NatTable", []), "dhcp": dhcp.get("DhcpTable", [])}
     except Exception:
         return {"nat": [], "dhcp": []}
 

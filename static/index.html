@@ -2915,7 +2915,7 @@ async function loadNatSessions() {
   dhcpTb.innerHTML = d.dhcp.length
     ? d.dhcp.map(l => `<tr>
         <td class="mono">${l.IpAddress_ip||'–'}</td>
-        <td class="mono">${l.MacAddress_bin||'–'}</td>
+        <td class="mono">${_macBinToHex(l.MacAddress_bin)||'–'}</td>
         <td>${l.Hostname_str||'–'}</td>
         <td>${fmtDate(l.ExpireTime_dt)}</td>
       </tr>`).join('')
