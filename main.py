@@ -825,6 +825,7 @@ async def _vpncmd_rpc(method: str, params: dict, host: str, port: int, password:
 
     if method in ("GetHubStatus", "GetHub"):
         kv = _vc_kv(await _vc_in(host, port, password, [f"Hub {hub}", "StatusGet"]))
+        snat_val = kv.get("SecureNAT", "")
         return {
             "HubName_str":      hub,
             "Online_bool":      _b(kv.get("Status", "")),
@@ -835,6 +836,7 @@ async def _vpncmd_rpc(method: str, params: dict, host: str, port: int, password:
             "NumMacTables_u32": _n(kv.get("MAC Tables", 0)),
             "NumIpTables_u32":  _n(kv.get("IP Tables",  0)),
             "NumLogin_u32":     _n(kv.get("Number of Logins", 0)),
+            "SecureNATEnabled_bool": _b(snat_val),
             "MaxSession_u32": 0, "NoEnum_bool": False,
             "LastCommTime_dt": 0, "LastLoginTime_dt": 0, "CreatedTime_dt": 0,
             "IsTrafficFilled_bool": False, "AdminPasswordPlainText_str": "",

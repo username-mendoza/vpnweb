@@ -1,0 +1,9 @@
+v1.3.10 (2026-05-28)
+--------------------
+Fix: SecureNAT status still showed Stopped for hubs using vpncmd fallback path.
+
+- vpncmd GetHubStatus handler now parses the "SecureNAT" field from StatusGet
+  output and populates SecureNATEnabled_bool correctly (key confirmed from
+  SoftEther source code — Command.c PsStatusGet, value is "Enabled"/"Disabled")
+- Only emitted for standalone hubs; cluster member hubs correctly show no
+  SecureNAT (SoftEther does not include the field for them)
