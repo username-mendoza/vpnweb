@@ -1,0 +1,7 @@
+v1.3.9 (2026-05-28)
+-------------------
+Fix: SecureNAT status always shown as Stopped in hub NAT/DHCP tab.
+
+- get_securenat now reads SecureNATEnabled_bool from GetHubStatus instead of
+  calling the non-existent GetHubSecureNATStatus method, which always threw
+  an exception and caused the badge to always display "Stopped"
