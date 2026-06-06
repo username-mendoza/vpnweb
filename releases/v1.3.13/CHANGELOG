@@ -1,0 +1,7 @@
+v1.3.13 (2026-05-29)
+--------------------
+Fix: DHCP leases and NAT sessions from previous hub still shown after switching
+to a hub where SecureNAT is disabled.
+
+- loadNatDhcp() now clears both tables before conditionally calling
+  loadNatSessions(), so stale rows from the previous hub can't bleed through.

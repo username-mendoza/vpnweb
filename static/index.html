@@ -2839,6 +2839,8 @@ async function loadNatDhcp() {
   document.getElementById('nat-dhcp-routes').value    = d.DhcpPushRoutes_str || '';
   document.getElementById('nat-save-log').checked     = d.SaveLog_bool || false;
   document.getElementById('nat-err').textContent = '';
+  document.getElementById('nat-sessions-table').innerHTML = '<tr><td colspan="7" class="empty">No active NAT sessions</td></tr>';
+  document.getElementById('dhcp-leases-table').innerHTML  = '<tr><td colspan="4" class="empty">No active leases</td></tr>';
   if (_natEnabled) loadNatSessions();
 }
 
