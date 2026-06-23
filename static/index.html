@@ -1346,7 +1346,7 @@ function b64toMac(b64) {
   } catch { return b64; }
 }
 function infoRows(pairs) {
-  return pairs.map(([k,v]) => `<tr><td style="color:#555;width:170px;white-space:nowrap">${k}</td><td class="mono">${v ?? '–'}</td></tr>`).join('');
+  return pairs.map(([k,v]) => `<tr><td style="color:#555;width:170px;white-space:nowrap">${esc(k)}</td><td class="mono">${esc(v ?? '–')}</td></tr>`).join('');
 }
 
 // ---- Auth & Profiles ----
@@ -1817,9 +1817,9 @@ function _updateCertCard(ci) {
   if (!ci || !ci.cn) { el.innerHTML = '<span style="color:#555">No certificate registered</span>'; return; }
   const d = s => (s||'?').slice(0,10);
   el.innerHTML = `<div style="display:grid;grid-template-columns:auto 1fr;gap:.15rem .75rem;align-items:baseline">
-    <span style="color:#555">Subject</span><span>${ci.subject || 'CN='+ci.cn}</span>
-    <span style="color:#555">Valid</span><span>${d(ci.valid_from)} → ${d(ci.valid_to)}</span>
-    <span style="color:#555">SHA-256</span><span style="font-family:monospace;font-size:.72rem;word-break:break-all">${ci.fingerprint}</span>
+    <span style="color:#555">Subject</span><span>${esc(ci.subject || 'CN='+ci.cn)}</span>
+    <span style="color:#555">Valid</span><span>${esc(d(ci.valid_from))} → ${esc(d(ci.valid_to))}</span>
+    <span style="color:#555">SHA-256</span><span style="font-family:monospace;font-size:.72rem;word-break:break-all">${esc(ci.fingerprint)}</span>
   </div>`;
 }
 
@@ -1863,7 +1863,7 @@ function _renderCertView(ci) {
   const tdR = `style="padding:.25rem 0;font-family:monospace;font-size:.75rem;word-break:break-all"`;
   tb.innerHTML = rows.map(([k,v]) => v === ''
     ? `<tr><td colspan="2" style="color:#444;padding:.4rem 0 .15rem;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase">${k}</td></tr>`
-    : `<tr><td ${tdL}>${k}</td><td ${tdR}>${v}</td></tr>`
+    : `<tr><td ${tdL}>${esc(k)}</td><td ${tdR}>${esc(v)}</td></tr>`
   ).join('');
 }
 
@@ -2617,21 +2617,22 @@ async function loadLinks() {
       : online
         ? '<span class="badge badge-yellow">Connecting…</span>'
         : '<span class="badge badge-red">Offline</span>';
+    const aname = esc(l.AccountName_utf);
     const toggleBtn = online
-      ? `<button class="btn btn-warning btn-sm" onclick="setLinkOffline('${l.AccountName_utf}')">Set Offline</button>`
-      : `<button class="btn btn-primary btn-sm"  onclick="setLinkOnline('${l.AccountName_utf}')">Set Online</button>`;
+      ? `<button class="btn btn-warning btn-sm" onclick="setLinkOffline(${JSON.stringify(l.AccountName_utf)})">Set Offline</button>`
+      : `<button class="btn btn-primary btn-sm"  onclick="setLinkOnline(${JSON.stringify(l.AccountName_utf)})">Set Online</button>`;
     return `<tr>
-      <td><strong>${l.AccountName_utf}</strong></td>
-      <td class="mono">${l.Hostname_str}</td>
+      <td><strong>${aname}</strong></td>
+      <td class="mono">${esc(l.Hostname_str)}</td>
       <td>${l.Port_u32 || '–'}</td>
-      <td>${l.TargetHubName_str || l.ConnectedHubName_str || '–'}</td>
-      <td>${l.Username_str || '–'}</td>
+      <td>${esc(l.TargetHubName_str || l.ConnectedHubName_str || '–')}</td>
+      <td>${esc(l.Username_str || '–')}</td>
       <td>${statusBadge}</td>
       <td>${fmtDate(l.ConnectedTime_dt)}</td>
       <td style="display:flex;gap:.35rem;flex-wrap:wrap">
         ${toggleBtn}
-        <button class="btn btn-ghost btn-sm" onclick="openEditLinkModal('${l.AccountName_utf}')">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteLink('${l.AccountName_utf}')">Delete</button>
+        <button class="btn btn-ghost btn-sm" onclick="openEditLinkModal(${JSON.stringify(l.AccountName_utf)})">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteLink(${JSON.stringify(l.AccountName_utf)})">Delete</button>
       </td>
     </tr>`;
   }).join('');

@@ -81,6 +81,19 @@ _rpc_port: ContextVar[int] = ContextVar("rpc_port", default=SOFTETHER_PORT)
 sessions_data: dict[str, dict] = {}
 SESSION_TIMEOUT = 30 * 60  # 30 minutes of inactivity
 
+# Login rate limiter: ip → list of attempt timestamps
+_login_attempts: dict[str, list] = {}
+_LOGIN_MAX = 10
+_LOGIN_WINDOW = 60
+
+def _check_login_rate(ip: str):
+    now = time.time()
+    attempts = [t for t in _login_attempts.get(ip, []) if now - t < _LOGIN_WINDOW]
+    if len(attempts) >= _LOGIN_MAX:
+        raise HTTPException(429, "Too many login attempts — try again later")
+    attempts.append(now)
+    _login_attempts[ip] = attempts
+
 # --- Profiles ---
 
 PROFILES_FILE = os.path.join(os.path.dirname(__file__), "profiles.json")
@@ -104,12 +117,18 @@ class ProfileModel(BaseModel):
     host2: str = ""
     port2: int = 5555
 
+def get_password(request: Request) -> str:
+    token = request.cookies.get("vpnweb_sid")
+    if not token or token not in sessions_data:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return sessions_data[token]["password"]
+
 @app.get("/api/profiles")
 async def get_profiles():
     return load_profiles()
 
 @app.post("/api/profiles")
-async def create_profile(body: ProfileModel):
+async def create_profile(body: ProfileModel, pw: str = Depends(get_password)):
     profiles = load_profiles()
     profile = {"id": secrets.token_hex(8), "name": body.name,
                "host": body.host, "port": body.port,
@@ -119,7 +138,7 @@ async def create_profile(body: ProfileModel):
     return profile
 
 @app.put("/api/profiles/{profile_id}")
-async def update_profile(profile_id: str, body: ProfileModel):
+async def update_profile(profile_id: str, body: ProfileModel, pw: str = Depends(get_password)):
     profiles = load_profiles()
     for p in profiles:
         if p["id"] == profile_id:
@@ -130,7 +149,7 @@ async def update_profile(profile_id: str, body: ProfileModel):
     raise HTTPException(status_code=404, detail="Profile not found")
 
 @app.delete("/api/profiles/{profile_id}")
-async def delete_profile(profile_id: str):
+async def delete_profile(profile_id: str, pw: str = Depends(get_password)):
     profiles = load_profiles()
     remaining = [p for p in profiles if p["id"] != profile_id]
     if not remaining:
@@ -1519,7 +1538,8 @@ async def _probe_host(host: str, port: int, password: str) -> bool:
         return False
 
 @app.post("/api/login")
-async def login(body: LoginRequest):
+async def login(body: LoginRequest, request: Request):
+    _check_login_rate(request.client.host)
     profiles = load_profiles()
     profile = next((p for p in profiles if p["id"] == body.profile_id), None)
     if not profile and profiles:
@@ -1561,7 +1581,7 @@ async def login(body: LoginRequest):
     }
     resp = JSONResponse({"ok": True, "profile_name": profile["name"] if profile else "Local Server",
                          "connected_host": host, "connected_port": port})
-    resp.set_cookie("vpnweb_sid", token, httponly=True, samesite="strict", secure=False, path="/")
+    resp.set_cookie("vpnweb_sid", token, httponly=True, samesite="strict", secure=True, path="/")
     return resp
 
 @app.post("/api/logout")
@@ -1571,12 +1591,6 @@ async def logout(request: Request, response: Response):
         sessions_data.pop(token, None)
     response.delete_cookie("vpnweb_sid")
     return {"ok": True}
-
-def get_password(request: Request) -> str:
-    token = request.cookies.get("vpnweb_sid")
-    if not token or token not in sessions_data:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return sessions_data[token]["password"]
 
 @app.get("/api/session/info")
 async def session_info(request: Request):
@@ -2154,12 +2168,16 @@ async def download_user_p12(hub: str, username: str, pw: str = Depends(get_passw
         headers={"Content-Disposition": f'attachment; filename="{username}_{hub}.p12"'}
     )
 
+_SAFE_HOST_RE = re.compile(r'^[a-zA-Z0-9._\-]{1,255}$')
+
 def _ovpn_host(request: Request, remote_host: Optional[str]) -> str:
     """Resolve the VPN server hostname for a .ovpn remote directive.
     Priority: explicit remote_host > profile RPC host > request Host header.
     Never returns 127.0.0.1/localhost — that's the local JSON-RPC address, not
     the client-facing address."""
     if remote_host:
+        if not _SAFE_HOST_RE.match(remote_host):
+            raise HTTPException(400, "Invalid remote_host")
         return remote_host
     rpc = _rpc_host.get()
     if rpc not in ("127.0.0.1", "::1", "localhost"):
@@ -2934,8 +2952,12 @@ async def set_keepalive(body: KeepAliveConfig, pw: str = Depends(get_password)):
 class VcmdDebugRequest(BaseModel):
     commands: list[str]
 
+def _require_localhost(request: Request):
+    if request.client.host not in ("127.0.0.1", "::1"):
+        raise HTTPException(403, "Debug endpoints are localhost-only")
+
 @app.post("/api/debug/vcmd")
-async def debug_vcmd(body: VcmdDebugRequest, request: Request, pw: str = Depends(get_password)):
+async def debug_vcmd(body: VcmdDebugRequest, request: Request, pw: str = Depends(get_password), _l: None = Depends(_require_localhost)):
     token = request.cookies.get("vpnweb_sid")
     d = sessions_data.get(token, {})
     host = d.get("host", SOFTETHER_HOST)  # full host with hint for vpncmd
@@ -2947,7 +2969,7 @@ async def debug_vcmd(body: VcmdDebugRequest, request: Request, pw: str = Depends
     return {"raw": text}
 
 @app.get("/api/debug/hub/{hub}/users")
-async def debug_hub_users(hub: str, pw: str = Depends(get_password)):
+async def debug_hub_users(hub: str, request: Request, pw: str = Depends(get_password), _l: None = Depends(_require_localhost)):
     host = _rpc_host.get()
     port = _rpc_port.get()
     # Test individual vpncmd call
@@ -2978,7 +3000,7 @@ async def debug_hub_users(hub: str, pw: str = Depends(get_password)):
     }
 
 @app.get("/api/debug/ddns")
-async def debug_ddns(pw: str = Depends(get_password)):
+async def debug_ddns(request: Request, pw: str = Depends(get_password), _l: None = Depends(_require_localhost)):
     host = _rpc_host.get()
     port = _rpc_port.get()
     # JSON-RPC direct attempts (stripped host)
@@ -3370,6 +3392,7 @@ async def download_register_p12(token: str):
         if not rec.get("activated"):
             raise HTTPException(400, "Certificate not yet generated — click Generate first")
         tokens[token]["used"] = True
+        tokens[token].pop("admin_password", None)
         _save_json_file(TOKENS_FILE, tokens)
 
     hub = rec["hub"]; username = rec["username"]
@@ -3449,6 +3472,8 @@ async def download_register_p12_raw(token: str):
         raise HTTPException(404, "Invalid registration token")
     if _dt.datetime.utcnow() > _dt.datetime.fromisoformat(rec["expires_at"]):
         raise HTTPException(410, "Registration link has expired")
+    if rec.get("revoked"):
+        raise HTTPException(410, "This invitation has been superseded — ask admin for a new link")
     if not rec.get("activated"):
         raise HTTPException(400, "Certificate not yet generated")
     hub = rec["hub"]; username = rec["username"]
@@ -3509,7 +3534,12 @@ async def register_complete(token: str, body: RegisterCompleteBody):
             raise HTTPException(404, "Invalid registration token")
         if _dt.datetime.utcnow() > _dt.datetime.fromisoformat(rec["expires_at"]):
             raise HTTPException(410, "Registration link has expired")
+        if rec.get("revoked"):
+            raise HTTPException(410, "This invitation has been superseded — ask admin for a new link")
+        if not rec.get("activated"):
+            raise HTTPException(400, "Certificate not yet generated")
         tokens[token]["used"] = True
+        tokens[token].pop("admin_password", None)
         if body.serial:
             tokens[token]["yubikey_serial"] = body.serial
         _save_json_file(TOKENS_FILE, tokens)
