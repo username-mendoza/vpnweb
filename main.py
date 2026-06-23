@@ -2379,7 +2379,7 @@ def _link_params(hub: str, body: LinkConfig) -> dict:
         "Hostname_str": body.hostname,
         "Port_u32": body.port,
         "HubName_str": body.dest_hub,
-        "AuthType_u32": 3,  # plain password
+        "AuthType_u32": 2,
         "Username_str": body.username,
         "PlainPassword_str": body.password,
         "Online_bool": body.online,

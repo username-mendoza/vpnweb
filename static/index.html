@@ -1097,7 +1097,7 @@
         <div class="form-row"><label>Link Name</label><input type="text" id="link-name"></div>
         <div class="form-row"><label>Server Hostname / IP</label><input type="text" id="link-host" placeholder="vpn.example.com"></div>
         <div class="form-row"><label>Port</label>
-          <select id="link-port"></select>
+          <input type="number" id="link-port" value="5555" min="1" max="65535">
         </div>
         <div class="form-row">
           <label style="display:flex;align-items:center;justify-content:space-between">
@@ -1150,7 +1150,7 @@
 </div>
 
 <!-- Modal: Session Detail -->
-<div class="modal-overlay" id="modal-session" onclick="if(event.target===this)closeModal('modal-session')">
+<div class="modal-overlay" id="modal-session">
   <div class="modal" style="width:700px;max-width:95vw">
     <h3 id="session-modal-title">Session</h3>
     <div class="modal-body">
@@ -1181,7 +1181,7 @@
 </div>
 
 <!-- Modal: Hub MAC Table -->
-<div class="modal-overlay" id="modal-mac-table" onclick="if(event.target===this)closeModal('modal-mac-table')">
+<div class="modal-overlay" id="modal-mac-table">
   <div class="modal" style="width:750px;max-width:95vw">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0;margin-bottom:1rem">
       <h3 style="margin:0">Hub MAC Address Table</h3>
@@ -1196,7 +1196,7 @@
 </div>
 
 <!-- Modal: Hub IP Table -->
-<div class="modal-overlay" id="modal-ip-table" onclick="if(event.target===this)closeModal('modal-ip-table')">
+<div class="modal-overlay" id="modal-ip-table">
   <div class="modal" style="width:700px;max-width:95vw">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0;margin-bottom:1rem">
       <h3 style="margin:0">Hub IP Address Table</h3>
@@ -1211,7 +1211,7 @@
 </div>
 
 <!-- Modal: Add ACL Rule -->
-<div class="modal-overlay" id="modal-acl" onclick="if(event.target===this)closeModal('modal-acl')">
+<div class="modal-overlay" id="modal-acl">
   <div class="modal" style="width:560px">
     <h3>Add Access Rule</h3>
     <div class="modal-body">
@@ -1269,7 +1269,7 @@
 </div>
 
 <!-- Modal: Connection Profiles -->
-<div class="modal-overlay" id="modal-profiles" onclick="if(event.target===this)closeModal('modal-profiles')">
+<div class="modal-overlay" id="modal-profiles">
   <div class="modal" style="width:520px;max-width:95vw">
     <h3>Connection Profiles</h3>
     <div class="modal-body">
@@ -1606,7 +1606,7 @@ function switchTab(el) {
   if (tab === 'users')     loadUsers();
   if (tab === 'groups')    loadGroups();
   if (tab === 'sessions')  loadSessionsAll();
-  if (tab === 'links')     loadLinks();
+  if (tab === 'links')     loadLinks(); else _stopLinksPoll();
   if (tab === 'nat')       loadNatDhcp();
   if (tab === 'acl')       loadAcl();
   if (tab === 'settings')  loadSettings();
@@ -2601,11 +2601,14 @@ async function loadIpTable() {
 }
 
 // ---- Links ----
+let _linksPollTimer = null;
+
 async function loadLinks() {
+  invalidateCache(`/api/hubs/${enc(currentHub)}/links`);
   const data = await api('GET', `/api/hubs/${enc(currentHub)}/links`);
   if (!data) return;
   const tb = document.getElementById('links-table');
-  if (!data.length) { tb.innerHTML = `<tr><td colspan="8" class="empty">No cascade links</td></tr>`; return; }
+  if (!data.length) { tb.innerHTML = `<tr><td colspan="8" class="empty">No cascade links</td></tr>`; _stopLinksPoll(); return; }
   tb.innerHTML = data.map(l => {
     const connected = l.Connected_bool;
     const online    = l.Online_bool;
@@ -2632,6 +2635,17 @@ async function loadLinks() {
       </td>
     </tr>`;
   }).join('');
+  const anyConnecting = data.some(l => l.Online_bool && !l.Connected_bool);
+  if (anyConnecting) _startLinksPoll();
+  else _stopLinksPoll();
+}
+
+function _startLinksPoll() {
+  if (_linksPollTimer) return;
+  _linksPollTimer = setInterval(() => { if (currentTab === 'links') loadLinks(); }, 3000);
+}
+function _stopLinksPoll() {
+  if (_linksPollTimer) { clearInterval(_linksPollTimer); _linksPollTimer = null; }
 }
 
 let editingLink = null;
@@ -2639,7 +2653,7 @@ let editingLink = null;
 function _linkFormDefaults() {
   document.getElementById('link-name').value     = '';
   document.getElementById('link-host').value     = '';
-  document.getElementById('link-port').innerHTML = '';
+  document.getElementById('link-port').value = '5555';
   document.getElementById('link-hub').value      = 'DEFAULT';
   document.getElementById('link-hub-sel').style.display = 'none';
   document.getElementById('link-hub-sel').innerHTML = '';
@@ -2696,12 +2710,8 @@ async function fetchRemoteHubs() {
 }
 
 async function populateLinkPortList(selectedPort) {
-  const sel = document.getElementById('link-port');
-  const listeners = await api('GET', '/api/server/listeners');
-  const ports = listeners ? listeners.map(l => l.Ports_u32).sort((a,b) => a-b) : [];
-  if (!ports.includes(5555)) ports.unshift(5555);
-  const want = selectedPort || 5555;
-  sel.innerHTML = ports.map(p => `<option value="${p}"${p==want?' selected':''}>${p}</option>`).join('');
+  const inp = document.getElementById('link-port');
+  inp.value = selectedPort || 5555;
 }
 
 function openNewLinkModal() {
@@ -3618,9 +3628,9 @@ async function saveKeepAlive() {
 const enc = encodeURIComponent;
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-document.querySelectorAll('.modal-overlay').forEach(m =>
-  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); })
-);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+});
 </script>
 </body>
 </html>
