@@ -1,0 +1,30 @@
+v1.3.17 (2026-08-16)
+--------------------
+Fix: passwords (and realnames/notes/group names) containing a space were
+silently truncated when a hub is reached via the vpncmd fallback (VPN
+Azure relay servers, or any server where direct JSON-RPC is unreachable).
+
+Root cause:
+- The vpncmd fallback builds each command as one text line fed to vpncmd
+  via /IN:file. vpncmd tokenizes each line on whitespace, same as a shell
+  command line — an unquoted `/PASSWORD:{value}` with a space in `value`
+  silently truncates at the first space instead of erroring.
+- Confirmed by direct reproduction: setting password "has a space"
+  unquoted via vpncmd produced the exact same HashedKey as setting just
+  "has" — the rest was dropped, with no error from vpncmd. Quoting the
+  value CSV-style (wrap in double quotes, double any embedded quote)
+  produced the correct full-password hash, matching a known-good value
+  set via direct RPC.
+- Direct JSON-RPC (the primary path, used whenever a server is reachable)
+  was verified unaffected — it sends the password as a single JSON string
+  field, so hashes matched exactly across CreateUser/SetUser/native
+  vpncmd for every test password tried, spaces and symbols included.
+
+Fix — added _vc_q(), quotes a value for a vpncmd script line, and applied
+it everywhere free text is interpolated into a vpncmd fallback command:
+CreateUser/SetUser (password, realname, note, group, and the username
+itself), DeleteUser/GetUser (username), CreateGroup/DeleteGroup (name,
+realname, note), SetHub (admin password), SetIPsecServices (PSK,
+default hub). The username itself was included because the same
+truncation applies there too — see the v1.3.16 fix for usernames with
+spaces, which covered the direct-RPC side of that same class of bug.

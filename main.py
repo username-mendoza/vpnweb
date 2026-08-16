@@ -240,6 +240,14 @@ async def _vc(host: str, port: int, password: str, *cmd_args: str) -> str:
     return text
 
 
+def _vc_q(s) -> str:
+    """Quote a value for a vpncmd /IN script line. Each line is tokenized by
+    vpncmd itself (like a shell command line) and splits on whitespace — an
+    unquoted value containing a space is silently truncated at the first
+    space instead of erroring. Wrap in double quotes, doubling any embedded
+    quote (vpncmd's own escaping convention, confirmed against /CSV output)."""
+    return '"' + str(s).replace('"', '""') + '"'
+
 async def _vc_in(host: str, port: int, password: str, commands: list[str]) -> str:
     """Run multiple vpncmd commands via /IN:file, return stdout."""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
@@ -866,7 +874,7 @@ async def _vpncmd_rpc(method: str, params: dict, host: str, port: int, password:
         cmds.append("Online" if params.get("Online_bool", True) else "Offline")
         pw = params.get("AdminPasswordPlainText_str", "")
         if pw:
-            cmds.append(f"SetHubPassword {pw}")
+            cmds.append(f"SetHubPassword {_vc_q(pw)}")
         await _vc_in(host, port, password, cmds)
         return {}
 
@@ -966,7 +974,7 @@ async def _vpncmd_rpc(method: str, params: dict, host: str, port: int, password:
 
     if method == "GetUser":
         uname = params.get("Name_str", "")
-        kv = _vc_kv(await _vc_in(host, port, password, [f"Hub {hub}", f"UserGet {uname}"]), "UserGet")
+        kv = _vc_kv(await _vc_in(host, port, password, [f"Hub {hub}", f"UserGet {_vc_q(uname)}"]), "UserGet")
         # Parse auth type from vpncmd text output
         auth_text = kv.get("Auth Type", kv.get("Authentication Method", kv.get("Authentication", ""))).lower()
         if "cert" in auth_text or "certificate" in auth_text or "x.509" in auth_text:
@@ -1009,9 +1017,9 @@ async def _vpncmd_rpc(method: str, params: dict, host: str, port: int, password:
         rname = params.get("RealName_utf", "")
         note  = params.get("Note_utf", "")
         cmds  = [f"Hub {hub}",
-                 f"UserCreate {uname} /GROUP:{group} /REALNAME:{rname} /NOTE:{note}"]
+                 f"UserCreate {_vc_q(uname)} /GROUP:{_vc_q(group)} /REALNAME:{_vc_q(rname)} /NOTE:{_vc_q(note)}"]
         if upw:
-            cmds.append(f"UserPasswordSet {uname} /PASSWORD:{upw}")
+            cmds.append(f"UserPasswordSet {_vc_q(uname)} /PASSWORD:{_vc_q(upw)}")
         await _vc_in(host, port, password, cmds)
         return {}
 
@@ -1022,15 +1030,15 @@ async def _vpncmd_rpc(method: str, params: dict, host: str, port: int, password:
         rname = params.get("RealName_utf", "")
         note  = params.get("Note_utf", "")
         cmds  = [f"Hub {hub}",
-                 f"UserEdit {uname} /GROUP:{group} /REALNAME:{rname} /NOTE:{note}"]
+                 f"UserEdit {_vc_q(uname)} /GROUP:{_vc_q(group)} /REALNAME:{_vc_q(rname)} /NOTE:{_vc_q(note)}"]
         if upw:
-            cmds.append(f"UserPasswordSet {uname} /PASSWORD:{upw}")
+            cmds.append(f"UserPasswordSet {_vc_q(uname)} /PASSWORD:{_vc_q(upw)}")
         await _vc_in(host, port, password, cmds)
         return {}
 
     if method == "DeleteUser":
         uname = params.get("Name_str", "")
-        await _vc_in(host, port, password, [f"Hub {hub}", f"UserDelete {uname}"])
+        await _vc_in(host, port, password, [f"Hub {hub}", f"UserDelete {_vc_q(uname)}"])
         return {}
 
     # ── Groups ────────────────────────────────────────────────────────────────
@@ -1055,12 +1063,12 @@ async def _vpncmd_rpc(method: str, params: dict, host: str, port: int, password:
         rname = params.get("Realname_utf", "")
         note  = params.get("Note_utf", "")
         await _vc_in(host, port, password,
-                     [f"Hub {hub}", f"GroupCreate {gname} /REALNAME:{rname} /NOTE:{note}"])
+                     [f"Hub {hub}", f"GroupCreate {_vc_q(gname)} /REALNAME:{_vc_q(rname)} /NOTE:{_vc_q(note)}"])
         return {}
 
     if method == "DeleteGroup":
         gname = params.get("Name_str", "")
-        await _vc_in(host, port, password, [f"Hub {hub}", f"GroupDelete {gname}"])
+        await _vc_in(host, port, password, [f"Hub {hub}", f"GroupDelete {_vc_q(gname)}"])
         return {}
 
     # ── Server listeners ─────────────────────────────────────────────────────
@@ -1145,7 +1153,7 @@ async def _vpncmd_rpc(method: str, params: dict, host: str, port: int, password:
             if params.get("L2TP_Raw_bool"):    flags.append("/L2TP:yes")
             if params.get("L2TP_IPsec_bool"):  flags.append("/L2TPIPSEC:yes")
             if params.get("EtherIP_IPsec_bool"): flags.append("/ETHERIP:yes")
-            cmds = [f"IPsecEnable {' '.join(flags)} /PSK:{secret} /DEFAULTHUB:{hub_d}"]
+            cmds = [f"IPsecEnable {' '.join(flags)} /PSK:{_vc_q(secret)} /DEFAULTHUB:{_vc_q(hub_d)}"]
         else:
             cmds = ["IPsecDisable"]
         await _vc_in(host, port, password, cmds)
