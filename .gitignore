@@ -2,6 +2,11 @@ __pycache__/
 *.pyc
 *.pyo
 generated_certs/
+certs/
 profiles.json
+config.json
+registration_tokens.json
+user_meta.json
+yubikey_registry.json
 *.log
 .env
