@@ -1,0 +1,15 @@
+v1.3.14 (2026-06-23)
+--------------------
+Fix: cascade connections stuck in Connecting / auth error. Also: modals no
+longer close on click outside.
+
+- _link_params used AuthType_u32: 3 (certificate auth) for cascade links —
+  should be 2 (plain password). This was the root cause of every cascade
+  link failing with LastError 4 → 9 (auth errors)
+- Cascade tab now auto-polls every 3s while any link is in the Connecting
+  state, and stops once all links are connected
+- Removed the global click-outside listener that closed modals — it made
+  it too easy to lose in-progress form input by misclicking. Escape key
+  closes the open modal instead
+- Cascade port field changed from a select (limited to local listener
+  ports only) to a free number input

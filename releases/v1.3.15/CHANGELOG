@@ -1,0 +1,28 @@
+v1.3.15 (2026-06-23)
+--------------------
+Security hardening pass across auth, session, and registration-token handling.
+
+Critical:
+- C1: admin_password scrubbed from the token record once the p12 is
+  downloaded / registration is completed — it no longer sits in
+  registration_tokens.json after use
+- C2: p12-raw endpoint now checks the revoked flag (was missing — a revoked
+  invite's cert could still be pulled via that route)
+- C3: /register/{token}/complete now checks `activated` before marking a
+  token used/revoked, closing a state-skip path
+
+High:
+- H1: POST/PUT/DELETE /api/profiles now require a valid session (were
+  unauthenticated — anyone who could reach the port could rewrite server
+  connection profiles)
+- H2: session cookie now set with secure=True (was False)
+- H3: /api/login rate-limited to 10 attempts per IP per minute
+- H4: /api/debug/* endpoints restricted to localhost only
+- H5/H6: infoRows(), the cert card, and _renderCertView() now escape all
+  server-supplied values before injecting into the DOM (XSS)
+
+Low / medium:
+- L4: cascade link table uses esc() and JSON.stringify for onclick
+  attribute values instead of raw string interpolation
+- M5: remote_host in .ovpn generation validated against a safe hostname
+  regex before being written into the generated config
