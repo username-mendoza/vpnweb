@@ -1912,8 +1912,8 @@ async def list_users(hub: str, pw: str = Depends(get_password)):
         result = await _vpncmd_rpc("EnumUser", params, host, port, pw)
     users = result.get("UserList", [])
     for u in users:
-        p12_path = _cert_path(hub, u.get("Name_str", ""))
-        u["has_p12"] = p12_path.exists()
+        p12_path = _cert_path_or_none(hub, u.get("Name_str", ""))
+        u["has_p12"] = p12_path.exists() if p12_path else False
         if u.get("AuthType_u32") == 2 and u["has_p12"]:
             try:
                 _, cert, _ = _pkcs12.load_key_and_certificates(p12_path.read_bytes(), None)
@@ -1944,7 +1944,8 @@ async def get_user(hub: str, username: str, pw: str = Depends(get_password)):
                 if info:
                     user["cert_info"] = info
                 break
-    user["has_p12"] = _cert_path(hub, username).exists()
+    _p12_path = _cert_path_or_none(hub, username)
+    user["has_p12"] = _p12_path.exists() if _p12_path else False
     meta = _load_meta().get(_meta_key(hub, username), {})
     user["email"] = meta.get("email", "")
     user["invite_status"] = meta.get("invite_status")
@@ -3228,6 +3229,16 @@ def _cert_path(hub: str, username: str) -> _pl.Path:
     if not str(path).startswith(str(CERTS_DIR.resolve())):
         raise HTTPException(400, "Invalid hub or username")
     return path
+
+def _cert_path_or_none(hub: str, username: str) -> Optional[_pl.Path]:
+    """Like _cert_path, but returns None instead of raising for names outside
+    the filesystem-safe charset (e.g. SoftEther usernames containing spaces).
+    A p12 is never written for such users anyway, since cert generation goes
+    through _cert_path too."""
+    try:
+        return _cert_path(hub, username)
+    except HTTPException:
+        return None
 
 
 # --- Invite endpoint (resend / admin-triggered) ---

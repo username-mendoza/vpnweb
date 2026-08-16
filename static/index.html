@@ -822,6 +822,25 @@
       <div id="user-pw-section">
         <div class="form-row"><label>Password</label><input type="password" id="user-pw"></div>
         <div class="form-row"><label>Confirm Password</label><input type="password" id="user-pw2"></div>
+
+        <!-- Password generator -->
+        <div style="background:#0f1117;border:1px solid #2a2d3e;border-radius:8px;padding:.75rem .85rem;margin-bottom:.85rem">
+          <div style="font-size:.72rem;font-weight:600;color:#444;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.6rem">Password Generator</div>
+          <div class="form-row-inline">
+            <label style="flex-shrink:0">Length</label>
+            <input type="range" id="pwgen-length" min="6" max="64" value="16" oninput="onPwgenLengthChange()" style="width:auto;flex:1;padding:0">
+            <span id="pwgen-length-val" style="font-size:.82rem;color:#bbb;width:2.2em;text-align:right;flex-shrink:0">16</span>
+          </div>
+          <div class="form-row-inline">
+            <label>Numbers</label>
+            <label class="toggle"><input type="checkbox" id="pwgen-numbers" checked><span class="toggle-slider"></span></label>
+          </div>
+          <div class="form-row-inline" style="margin-bottom:.6rem">
+            <label>Symbols</label>
+            <label class="toggle"><input type="checkbox" id="pwgen-symbols" checked><span class="toggle-slider"></span></label>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm btn-full" style="margin-top:0" onclick="generatePassword()">Generate Password</button>
+        </div>
       </div>
 
       <!-- Certificate section -->
@@ -1703,9 +1722,15 @@ async function loadHubOverview() {
 
 // ---- Users ----
 async function loadUsers() {
-  const data = await api('GET', `/api/hubs/${enc(currentHub)}/users`);
-  if (!data) return;
   const tb = document.getElementById('users-table');
+  let data;
+  try {
+    data = await api('GET', `/api/hubs/${enc(currentHub)}/users`);
+  } catch (e) {
+    tb.innerHTML = `<tr><td colspan="8" class="empty" style="color:#f44336">Failed to load users: ${esc(e.message)}</td></tr>`;
+    return;
+  }
+  if (!data) return;
   if (!data.length) { tb.innerHTML = `<tr><td colspan="8" class="empty">No users</td></tr>`; return; }
 
   const now = new Date();
@@ -1765,10 +1790,17 @@ async function openEditUser(name) {
   document.getElementById('edit-user-cert-file').value = '';
   document.getElementById('edit-user-cert-panel').style.display = 'none';
   invalidateCache(`/api/hubs/${enc(currentHub)}/users/${enc(name)}`);
-  const [user, groups] = await Promise.all([
-    api('GET', `/api/hubs/${enc(currentHub)}/users/${enc(name)}`),
-    api('GET', `/api/hubs/${enc(currentHub)}/groups`),
-  ]);
+  openModal('modal-edit-user');
+  let user, groups;
+  try {
+    [user, groups] = await Promise.all([
+      api('GET', `/api/hubs/${enc(currentHub)}/users/${enc(name)}`),
+      api('GET', `/api/hubs/${enc(currentHub)}/groups`),
+    ]);
+  } catch (e) {
+    document.getElementById('edit-user-err').textContent = 'Failed to load user: ' + e.message;
+    return;
+  }
   if (!user) return;
   document.getElementById('edit-user-realname').value = user.Realname_utf || '';
   document.getElementById('edit-user-note').value     = user.Note_utf || '';
@@ -1809,7 +1841,6 @@ async function openEditUser(name) {
   document.getElementById('invite-keysize').value = ci.key_bits >= 4096 ? '4096' : '2048';
   document.getElementById('invite-email').value   = user.email || '';
   document.getElementById('invite-err').textContent = '';
-  openModal('modal-edit-user');
 }
 
 function _updateCertCard(ci) {
@@ -1900,6 +1931,30 @@ async function saveUser() {
   } catch(e) { document.getElementById('edit-user-err').textContent = e.message; }
 }
 
+function onPwgenLengthChange() {
+  document.getElementById('pwgen-length-val').textContent = document.getElementById('pwgen-length').value;
+}
+
+function generatePassword() {
+  const length  = parseInt(document.getElementById('pwgen-length').value) || 16;
+  const useNums = document.getElementById('pwgen-numbers').checked;
+  const useSyms = document.getElementById('pwgen-symbols').checked;
+  const lower = 'abcdefghijklmnopqrstuvwxyz';
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const nums  = '0123456789';
+  const syms  = '!@#$%^&*()-_=+[]{}';
+  let charset = lower + upper;
+  if (useNums) charset += nums;
+  if (useSyms) charset += syms;
+  const bytes = new Uint32Array(length);
+  crypto.getRandomValues(bytes);
+  let pw = Array.from(bytes, b => charset[b % charset.length]).join('');
+  document.getElementById('user-pw').value = pw;
+  document.getElementById('user-pw2').value = pw;
+  document.getElementById('user-pw').type = 'text';
+  document.getElementById('user-pw2').type = 'text';
+}
+
 let _newUserAuthMode = 'password';
 let _newUserCertPanel = null;
 
@@ -1911,6 +1966,12 @@ async function openNewUserModal() {
   });
   document.getElementById('user-gen-days').value = '1825';
   document.getElementById('user-gen-keysize').value = '2048';
+  document.getElementById('pwgen-length').value = '16';
+  document.getElementById('pwgen-length-val').textContent = '16';
+  document.getElementById('pwgen-numbers').checked = true;
+  document.getElementById('pwgen-symbols').checked = true;
+  document.getElementById('user-pw').type = 'password';
+  document.getElementById('user-pw2').type = 'password';
   document.getElementById('user-send-invite').checked = false;
   document.getElementById('user-invite-section').style.display = 'none';
   document.getElementById('user-no-invite-hint').style.display = '';

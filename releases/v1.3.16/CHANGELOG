@@ -1,0 +1,30 @@
+v1.3.16 (2026-08-16)
+--------------------
+Fix: usernames containing a space broke the entire hub user list. New:
+password generator in the Create User dialog.
+
+Fix — user list / edit broken by non-filesystem-safe usernames:
+- _cert_path() validates hub/username against a filesystem-safe charset
+  ([a-zA-Z0-9_.-]) before building a .p12 path — correct for cert file I/O,
+  but SoftEther usernames are free-form (e.g. "Staale Kolbeinsen" has a
+  space). list_users() and get_user() called _cert_path() directly for
+  every user just to check has_p12, so one such username threw a 400 that
+  took down the whole hub's user list, and made that user's own Edit
+  modal fail outright
+- Added _cert_path_or_none(): same validation, but returns None instead of
+  raising. A name outside the safe charset is treated as "no p12 on disk"
+  (correct — cert generation goes through the same charset check, so one
+  was never written for that user anyway)
+- Frontend: openEditUser() now wraps its data fetch in try/catch and shows
+  the error in the modal instead of silently doing nothing; loadUsers()
+  catches fetch failures and renders an error row instead of leaving the
+  table showing stale data
+
+New — password generator (Create User → Password auth):
+- Length slider (6–64, default 16), and toggle switches for numbers and
+  symbols, matching the existing toggle-switch style used elsewhere
+- Generates via crypto.getRandomValues (not Math.random), fills both
+  Password and Confirm Password, and switches those fields to visible
+  text so the generated value can be read/copied
+- Reopening the Create User modal resets the generator to defaults and
+  re-masks the password fields
